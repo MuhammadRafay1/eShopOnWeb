@@ -16,6 +16,18 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .IsRequired()
             .HasMaxLength(256);
 
+        builder.Property(o => o.Status)
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .IsRequired();
+
+        // One-to-one: an Order has at most one OrderPayment (created the first time /pay runs).
+        builder.HasOne(o => o.Payment)
+            .WithOne()
+            .HasForeignKey<Microsoft.eShopWeb.ApplicationCore.Entities.OrderAggregate.OrderPayment>(p => p.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(o => o.Payment).IsRequired(false);
+
         builder.OwnsOne(o => o.ShipToAddress, a =>
         {
             a.WithOwner();

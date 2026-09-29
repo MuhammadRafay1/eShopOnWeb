@@ -12,6 +12,7 @@ using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
+using Microsoft.eShopWeb.Infrastructure.PayPal;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
 using Microsoft.Extensions.Configuration;
@@ -84,6 +85,27 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 builder.Configuration.AddEnvironmentVariables();
+
+// The task's PayPal env vars use a single underscore and no section prefix
+// (PAYPAL_CLIENT_ID, ...), which ASP.NET Core's AddEnvironmentVariables() does NOT map to
+// PayPal:ClientId. Map them explicitly here so they win over any earlier source. Only variables
+// that are actually set are mapped, so user-secrets / PayPal__* still supply values otherwise.
+var payPalEnvMap = new Dictionary<string, string?>();
+void MapPayPalEnv(string key, string variable)
+{
+    var value = System.Environment.GetEnvironmentVariable(variable);
+    if (!string.IsNullOrEmpty(value)) payPalEnvMap[key] = value;
+}
+MapPayPalEnv("PayPal:ClientId", "PAYPAL_CLIENT_ID");
+MapPayPalEnv("PayPal:ClientSecret", "PAYPAL_CLIENT_SECRET");
+MapPayPalEnv("PayPal:Environment", "PAYPAL_ENVIRONMENT");
+MapPayPalEnv("PayPal:Currency", "PAYPAL_CURRENCY");
+if (payPalEnvMap.Count > 0)
+{
+    builder.Configuration.AddInMemoryCollection(payPalEnvMap);
+}
+
+builder.Services.AddPayPalIntegration(builder.Configuration);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>

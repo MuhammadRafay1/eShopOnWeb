@@ -1,0 +1,15 @@
+using Ardalis.Specification;
+using Microsoft.eShopWeb.ApplicationCore.Entities.BuyerAggregate;
+
+namespace Microsoft.eShopWeb.ApplicationCore.Specifications;
+
+/// <summary>Loads a buyer (by username) with their saved payment methods.</summary>
+public class BuyerWithPaymentMethodsSpecification : Specification<Buyer>
+{
+    public BuyerWithPaymentMethodsSpecification(string identityGuid)
+    {
+        Query
+            .Where(b => b.IdentityGuid == identityGuid)
+            .Include(b => b.PaymentMethods);
+    }
+}

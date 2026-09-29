@@ -1,9 +1,11 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Ardalis.GuardClauses;
 using Microsoft.eShopWeb.ApplicationCore.Entities;
 using Microsoft.eShopWeb.ApplicationCore.Entities.BasketAggregate;
 using Microsoft.eShopWeb.ApplicationCore.Entities.OrderAggregate;
+using Microsoft.eShopWeb.ApplicationCore.Exceptions;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
 using Microsoft.eShopWeb.ApplicationCore.Specifications;
 
@@ -49,5 +51,38 @@ public class OrderService : IOrderService
         var order = new Order(basket.BuyerId, shippingAddress, items);
 
         await _orderRepository.AddAsync(order);
+    }
+
+    public async Task<Order> CreateOrderFromCatalogItemsAsync(
+        string buyerId,
+        Address shipToAddress,
+        IReadOnlyList<(int CatalogItemId, int Quantity)> items)
+    {
+        Guard.Against.NullOrEmpty(buyerId, nameof(buyerId));
+        Guard.Against.Null(shipToAddress, nameof(shipToAddress));
+        Guard.Against.Null(items, nameof(items));
+        if (items.Count == 0)
+        {
+            throw new InvalidPaymentRequestException("An order must contain at least one item.");
+        }
+        if (items.Any(i => i.Quantity <= 0))
+        {
+            throw new InvalidPaymentRequestException("Every order item must have a quantity greater than zero.");
+        }
+
+        var catalogItemsSpecification = new CatalogItemsSpecification(items.Select(i => i.CatalogItemId).ToArray());
+        var catalogItems = await _itemRepository.ListAsync(catalogItemsSpecification);
+
+        var orderItems = items.Select(requested =>
+        {
+            var catalogItem = catalogItems.FirstOrDefault(c => c.Id == requested.CatalogItemId)
+                ?? throw new CatalogItemNotFoundException(requested.CatalogItemId);
+            var itemOrdered = new CatalogItemOrdered(catalogItem.Id, catalogItem.Name, _uriComposer.ComposePicUri(catalogItem.PictureUri));
+            return new OrderItem(itemOrdered, catalogItem.Price, requested.Quantity);
+        }).ToList();
+
+        var order = new Order(buyerId, shipToAddress, orderItems);
+
+        return await _orderRepository.AddAsync(order);
     }
 }
