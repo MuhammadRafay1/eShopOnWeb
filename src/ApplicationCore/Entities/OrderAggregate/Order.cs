@@ -44,4 +44,47 @@ public class Order : BaseEntity, IAggregateRoot
         }
         return total;
     }
+
+    // Payment / fulfilment state machine. Kept on the entity itself (rather than in the
+    // endpoint or service layer) so the legal transitions can never be bypassed by a future
+    // caller. Every transition guards its allowed source states.
+    public OrderStatus Status { get; private set; } = OrderStatus.AwaitingPayment;
+
+    public void MarkPaymentAuthorized()
+    {
+        Guard.Against.InvalidInput(Status, nameof(Status), s => s == OrderStatus.AwaitingPayment,
+            "Order must be awaiting payment to authorize.");
+        Status = OrderStatus.PaymentAuthorized;
+    }
+
+    public void MarkFulfilled()
+    {
+        Guard.Against.InvalidInput(Status, nameof(Status), s => s == OrderStatus.PaymentAuthorized,
+            "Order must have an authorized payment to fulfil.");
+        Status = OrderStatus.Fulfilled;
+    }
+
+    public void MarkCancelled()
+    {
+        Guard.Against.InvalidInput(Status, nameof(Status),
+            s => s is OrderStatus.AwaitingPayment or OrderStatus.PaymentAuthorized,
+            "Only an unfulfilled order can be cancelled.");
+        Status = OrderStatus.Cancelled;
+    }
+
+    public void MarkPartiallyRefunded()
+    {
+        Guard.Against.InvalidInput(Status, nameof(Status),
+            s => s is OrderStatus.Fulfilled or OrderStatus.PartiallyRefunded,
+            "Only a fulfilled order can be refunded.");
+        Status = OrderStatus.PartiallyRefunded;
+    }
+
+    public void MarkFullyRefunded()
+    {
+        Guard.Against.InvalidInput(Status, nameof(Status),
+            s => s is OrderStatus.Fulfilled or OrderStatus.PartiallyRefunded,
+            "Only a fulfilled order can be refunded.");
+        Status = OrderStatus.Refunded;
+    }
 }

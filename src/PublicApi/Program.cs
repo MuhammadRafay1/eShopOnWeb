@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using BlazorShared;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -31,7 +32,31 @@ builder.Services.AddEndpoints();
 builder.Configuration.AddConfigurationFile("appsettings.test.json");
 builder.Logging.AddConsole();
 
+// Bridge the PAYPAL_* environment variables (single underscore) into the PayPal: configuration
+// section. ASP.NET's env-var provider only maps double-underscore (PayPal__ClientId); this makes
+// "credentials arrive as PAYPAL_* env vars" and "bind from PayPal: keys" both true, with no manual
+// step. Only the config KEY names live in source — never the secret VALUES.
+var payPalEnvOverrides = new Dictionary<string, string?>
+{
+    ["PayPal:ClientId"] = Environment.GetEnvironmentVariable("PAYPAL_CLIENT_ID"),
+    ["PayPal:ClientSecret"] = Environment.GetEnvironmentVariable("PAYPAL_CLIENT_SECRET"),
+    ["PayPal:Environment"] = Environment.GetEnvironmentVariable("PAYPAL_ENVIRONMENT"),
+    ["PayPal:Currency"] = Environment.GetEnvironmentVariable("PAYPAL_CURRENCY"),
+    ["PayPal:BaseUrl"] = Environment.GetEnvironmentVariable("PAYPAL_BASE_URL"),
+};
+builder.Configuration.AddInMemoryCollection(
+    payPalEnvOverrides.Where(kv => !string.IsNullOrWhiteSpace(kv.Value)));
+
 Microsoft.eShopWeb.Infrastructure.Dependencies.ConfigureServices(builder.Configuration, builder.Services);
+
+// Payment flows: order placement, PayPal client, and the payment/saved-card/reconciliation services.
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IPaymentMethodService, PaymentMethodService>();
+builder.Services.AddScoped<IReconciliationService, ReconciliationService>();
+builder.Services.Configure<Microsoft.eShopWeb.ApplicationCore.Interfaces.PayPal.PaymentSettings>(
+    builder.Configuration.GetSection(Microsoft.eShopWeb.ApplicationCore.Interfaces.PayPal.PaymentSettings.ConfigSection));
+Microsoft.eShopWeb.Infrastructure.PayPal.PayPalServiceExtensions.AddPayPal(builder.Services, builder.Configuration);
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
         .AddEntityFrameworkStores<AppIdentityDbContext>()
