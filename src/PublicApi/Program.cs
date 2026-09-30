@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using BlazorShared;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -8,8 +9,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.eShopWeb;
 using Microsoft.eShopWeb.ApplicationCore.Constants;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
+using Microsoft.eShopWeb.ApplicationCore.Interfaces.PayPal;
 using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
+using Microsoft.eShopWeb.Infrastructure.PayPal;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
 using Microsoft.eShopWeb.PublicApi;
@@ -84,6 +87,44 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 builder.Configuration.AddEnvironmentVariables();
+
+// The credential env vars are flat (single underscore), so ASP.NET Core's env-var provider does
+// not nest them under the PayPal section on its own. Bridge them explicitly to PayPal:* keys.
+// (Values are never written to any repo file; they arrive from the environment / user-secrets.)
+var payPalEnvKeys = new (string EnvVar, string ConfigKey)[]
+{
+    ("PAYPAL_CLIENT_ID", "PayPal:ClientId"),
+    ("PAYPAL_CLIENT_SECRET", "PayPal:ClientSecret"),
+    ("PAYPAL_ENVIRONMENT", "PayPal:Environment"),
+    ("PAYPAL_CURRENCY", "PayPal:Currency"),
+};
+var payPalOverrides = payPalEnvKeys
+    .Select(kv => (kv.ConfigKey, Value: builder.Configuration[kv.EnvVar]))
+    .Where(kv => !string.IsNullOrEmpty(kv.Value) && string.IsNullOrEmpty(builder.Configuration[kv.ConfigKey]))
+    .Select(kv => new KeyValuePair<string, string?>(kv.ConfigKey, kv.Value));
+builder.Configuration.AddInMemoryCollection(payPalOverrides);
+
+// Bind PayPal settings and register the resolved options plus the hand-written PayPal client.
+builder.Services.Configure<PayPalOptions>(builder.Configuration.GetSection(PayPalOptions.SectionName));
+var payPalOptions = builder.Configuration.GetSection(PayPalOptions.SectionName).Get<PayPalOptions>()
+    ?? new PayPalOptions();
+builder.Services.AddSingleton(payPalOptions);
+
+builder.Services.AddHttpClient<PayPalClient>((sp, http) =>
+{
+    http.BaseAddress = new Uri(payPalOptions.ResolveBaseUrl().TrimEnd('/') + "/");
+    http.DefaultRequestHeaders.Accept.Add(
+        new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+});
+builder.Services.AddScoped<IPayPalOrdersClient>(sp => sp.GetRequiredService<PayPalClient>());
+builder.Services.AddScoped<IPayPalPaymentsClient>(sp => sp.GetRequiredService<PayPalClient>());
+builder.Services.AddScoped<IPayPalVaultClient>(sp => sp.GetRequiredService<PayPalClient>());
+builder.Services.AddScoped<IPayPalReportingClient>(sp => sp.GetRequiredService<PayPalClient>());
+
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IPaymentMethodService, PaymentMethodService>();
+builder.Services.AddScoped<IReconciliationService, ReconciliationService>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>

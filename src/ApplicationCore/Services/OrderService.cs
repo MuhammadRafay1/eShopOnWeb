@@ -1,4 +1,5 @@
-﻿using System.Linq;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Ardalis.GuardClauses;
 using Microsoft.eShopWeb.ApplicationCore.Entities;
@@ -49,5 +50,35 @@ public class OrderService : IOrderService
         var order = new Order(basket.BuyerId, shippingAddress, items);
 
         await _orderRepository.AddAsync(order);
+    }
+
+    public async Task<Order> CreateOrderFromItemsAsync(string buyerId, Address shippingAddress,
+        IEnumerable<OrderItemRequest> items)
+    {
+        Guard.Against.NullOrEmpty(buyerId, nameof(buyerId));
+        var requested = items?.ToList() ?? new List<OrderItemRequest>();
+        Guard.Against.NullOrEmpty(requested, nameof(items));
+        foreach (var item in requested)
+        {
+            Guard.Against.OutOfRange(item.Quantity, nameof(item.Quantity), 1, int.MaxValue);
+        }
+
+        // Look up prices from the catalog rather than trusting anything the caller sent.
+        var catalogItemIds = requested.Select(i => i.CatalogItemId).Distinct().ToArray();
+        var catalogItemsSpec = new CatalogItemsSpecification(catalogItemIds);
+        var catalogItems = await _itemRepository.ListAsync(catalogItemsSpec);
+
+        var orderItems = requested.Select(requestedItem =>
+        {
+            var catalogItem = catalogItems.FirstOrDefault(c => c.Id == requestedItem.CatalogItemId);
+            Guard.Against.Null(catalogItem, nameof(catalogItem),
+                $"Catalog item {requestedItem.CatalogItemId} was not found.");
+            var itemOrdered = new CatalogItemOrdered(catalogItem!.Id, catalogItem.Name,
+                _uriComposer.ComposePicUri(catalogItem.PictureUri));
+            return new OrderItem(itemOrdered, catalogItem.Price, requestedItem.Quantity);
+        }).ToList();
+
+        var order = new Order(buyerId, shippingAddress, orderItems);
+        return await _orderRepository.AddAsync(order);
     }
 }

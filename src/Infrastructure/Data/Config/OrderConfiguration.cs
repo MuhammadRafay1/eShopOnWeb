@@ -16,6 +16,16 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .IsRequired()
             .HasMaxLength(256);
 
+        builder.Property(o => o.Status)
+            .HasConversion<int>()
+            .IsRequired();
+
+        // Order (1) -> Payment (0..1); the payment carries the FK "OrderId".
+        builder.HasOne(o => o.Payment)
+            .WithOne()
+            .HasForeignKey<Payment>(p => p.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.OwnsOne(o => o.ShipToAddress, a =>
         {
             a.WithOwner();
