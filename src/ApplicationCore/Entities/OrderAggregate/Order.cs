@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Ardalis.GuardClauses;
+using Microsoft.eShopWeb.ApplicationCore.Exceptions;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
 
 namespace Microsoft.eShopWeb.ApplicationCore.Entities.OrderAggregate;
@@ -22,6 +23,48 @@ public class Order : BaseEntity, IAggregateRoot
     public string BuyerId { get; private set; }
     public DateTimeOffset OrderDate { get; private set; } = DateTimeOffset.Now;
     public Address ShipToAddress { get; private set; }
+
+    // Additive payment lifecycle. New orders (storefront or API) start awaiting payment; the
+    // transition methods below are the single source of truth for the state machine.
+    public OrderStatus Status { get; private set; } = OrderStatus.AwaitingPayment;
+
+    // Read-only predicates so the endpoint layer can check-before-calling for the idempotent
+    // replay case without a try/catch.
+    public bool CurrentlyPayable => Status == OrderStatus.AwaitingPayment;
+    public bool CurrentlyFulfillable => Status == OrderStatus.PaymentAuthorized;
+    public bool CurrentlyCancellable => Status is OrderStatus.AwaitingPayment or OrderStatus.PaymentAuthorized;
+    public bool CurrentlyRefundable => Status is OrderStatus.Fulfilled or OrderStatus.PartiallyRefunded;
+
+    public void MarkPaymentAuthorized()
+    {
+        if (Status == OrderStatus.PaymentAuthorized) return; // idempotent no-op
+        if (Status != OrderStatus.AwaitingPayment)
+            throw new InvalidOrderStateException($"Order {Id} cannot be authorized from state {Status}.");
+        Status = OrderStatus.PaymentAuthorized;
+    }
+
+    public void MarkFulfilled()
+    {
+        if (Status == OrderStatus.Fulfilled) return; // idempotent no-op
+        if (Status != OrderStatus.PaymentAuthorized)
+            throw new InvalidOrderStateException($"Order {Id} cannot be fulfilled from state {Status}.");
+        Status = OrderStatus.Fulfilled;
+    }
+
+    public void MarkCancelled()
+    {
+        if (Status == OrderStatus.Cancelled) return; // idempotent no-op
+        if (Status is not (OrderStatus.AwaitingPayment or OrderStatus.PaymentAuthorized))
+            throw new InvalidOrderStateException($"Order {Id} cannot be cancelled from state {Status}; a fulfilled order must be refunded instead.");
+        Status = OrderStatus.Cancelled;
+    }
+
+    public void MarkRefunded(bool isFullRefund)
+    {
+        if (Status is not (OrderStatus.Fulfilled or OrderStatus.PartiallyRefunded))
+            throw new InvalidOrderStateException($"Order {Id} cannot be refunded from state {Status}.");
+        Status = isFullRefund ? OrderStatus.Refunded : OrderStatus.PartiallyRefunded;
+    }
 
     // DDD Patterns comment
     // Using a private collection field, better for DDD Aggregate's encapsulation

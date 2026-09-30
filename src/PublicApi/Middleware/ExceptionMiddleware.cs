@@ -41,6 +41,30 @@ public class ExceptionMiddleware
                 Message = duplicationException.Message
             }.ToString());
         }
+        else if (exception is InvalidOrderStateException or PaymentAuthorizationNotRenewableException)
+        {
+            // Illegal state transition, or a stale authorization that cannot be renewed — both are
+            // conditions an operator/shopper can act on, not server faults.
+            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
+            await context.Response.WriteAsync(new ErrorDetails()
+            {
+                StatusCode = context.Response.StatusCode,
+                Message = exception.Message
+            }.ToString());
+        }
+        else if (exception is PaymentGatewayException gatewayException)
+        {
+            // The payment processor rejected the request or was unreachable.
+            context.Response.StatusCode = (int)HttpStatusCode.BadGateway;
+            await context.Response.WriteAsync(new ErrorDetails()
+            {
+                StatusCode = context.Response.StatusCode,
+                Message = gatewayException.PayPalErrorName is not null
+                    ? $"{gatewayException.Message} (PayPal error: {gatewayException.PayPalErrorName}" +
+                      (gatewayException.PayPalDebugId is not null ? $", debug id {gatewayException.PayPalDebugId}" : "") + ")"
+                    : gatewayException.Message
+            }.ToString());
+        }
         else
         {
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
