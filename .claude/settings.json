@@ -1,0 +1,33 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\claude-runs\\t3zaid-task3-docs-mcp-2p-rev-sonnet5high-002\\repo\\.claude\\hooks\\maxio-process-guard.ps1\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash|PowerShell"
+      },
+      {
+        "hooks": [
+          {
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\claude-runs\\t3zaid-task3-docs-mcp-2p-rev-sonnet5high-002\\repo\\.claude\\hooks\\task3-web-guard.ps1\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "WebSearch|WebFetch"
+      },
+      {
+        "hooks": [
+          {
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\claude-runs\\t3zaid-task3-docs-mcp-2p-rev-sonnet5high-002\\repo\\.claude\\hooks\\plan-phase-guard.ps1\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit"
+      }
+    ]
+  }
+}
