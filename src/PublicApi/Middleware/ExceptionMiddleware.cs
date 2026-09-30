@@ -32,23 +32,28 @@ public class ExceptionMiddleware
     {
         context.Response.ContentType = "application/json";
 
-        if (exception is DuplicateException duplicationException)
+        // Map each domain exception to a deliberate status. A PayPal-side problem (502) is kept distinct from
+        // a generic 500 so a caller does not retry a deterministic rejection, and never from the raw exception
+        // message so no internal or card detail can leak.
+        var (statusCode, message) = exception switch
         {
-            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = duplicationException.Message
-            }.ToString());
-        }
-        else
+            OrderNotFoundException => (HttpStatusCode.NotFound, exception.Message),
+            PaymentMethodNotFoundException => (HttpStatusCode.NotFound, exception.Message),
+            InvalidPaymentRequestException => (HttpStatusCode.BadRequest, exception.Message),
+            PaymentDeclinedException => (HttpStatusCode.PaymentRequired, exception.Message),
+            PayerActionRequiredException => (HttpStatusCode.PaymentRequired, exception.Message),
+            OrderStateConflictException => (HttpStatusCode.Conflict, exception.Message),
+            AuthorizationCannotBeRenewedException => (HttpStatusCode.Conflict, exception.Message),
+            DuplicateException => (HttpStatusCode.Conflict, exception.Message),
+            PaymentGatewayException => (HttpStatusCode.BadGateway, exception.Message),
+            _ => (HttpStatusCode.InternalServerError, "An unexpected error occurred.")
+        };
+
+        context.Response.StatusCode = (int)statusCode;
+        await context.Response.WriteAsync(new ErrorDetails()
         {
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = exception.Message
-            }.ToString());
-        }
+            StatusCode = context.Response.StatusCode,
+            Message = message
+        }.ToString());
     }
 }

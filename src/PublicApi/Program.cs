@@ -22,6 +22,11 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MinimalApi.Endpoint.Configurations.Extensions;
 using MinimalApi.Endpoint.Extensions;
+using Microsoft.eShopWeb.Infrastructure.Services.PayPal;
+using PayPalServerSdk;
+using PayPalServerSdk.Servers;
+using PayPalServerSdk.Core.Authentication.OAuth2.ClientCredentials;
+using PayPalServerSdk.Core.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -85,6 +90,57 @@ builder.Services.AddControllers();
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 builder.Configuration.AddEnvironmentVariables();
 
+// --- PayPal configuration & DI ---------------------------------------------------------------------
+// ASP.NET Core's default env-var provider maps PAYPAL_CLIENT_ID -> config key "PAYPAL_CLIENT_ID", not
+// "PayPal:ClientId" (its section delimiter is "__"). Bridge the task's env vars onto the PayPal: keys so
+// the same PayPalOptions binding works whether values arrive via user-secrets, appsettings, or env vars.
+// Only the variable NAMES appear here; the values live outside the repo.
+static void BridgeEnvVar(ConfigurationManager config, string envVarName, string configKey)
+{
+    var value = System.Environment.GetEnvironmentVariable(envVarName);
+    if (!string.IsNullOrWhiteSpace(value)) config[configKey] = value;
+}
+BridgeEnvVar(builder.Configuration, "PAYPAL_CLIENT_ID", "PayPal:ClientId");
+BridgeEnvVar(builder.Configuration, "PAYPAL_CLIENT_SECRET", "PayPal:ClientSecret");
+BridgeEnvVar(builder.Configuration, "PAYPAL_ENVIRONMENT", "PayPal:Environment");
+BridgeEnvVar(builder.Configuration, "PAYPAL_CURRENCY", "PayPal:Currency");
+BridgeEnvVar(builder.Configuration, "PAYPAL_BASE_URL", "PayPal:BaseUrl"); // optional override
+
+var payPalSection = builder.Configuration.GetSection(PayPalOptions.CONFIG_NAME);
+builder.Services.Configure<PayPalOptions>(payPalSection);
+var payPalOptions = payPalSection.Get<PayPalOptions>() ?? new PayPalOptions();
+
+// Diagnostics handler on the SDK's (default, unnamed) HttpClient: records the real response status so the
+// gateway can disambiguate a JsonException on the error path, and bounds a single attempt.
+builder.Services.AddTransient<PayPalDiagnosticsHandler>();
+builder.Services.AddHttpClient(Microsoft.Extensions.Options.Options.DefaultName)
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(30))
+    .AddHttpMessageHandler<PayPalDiagnosticsHandler>();
+
+builder.Services.AddPayPalServerSdkClient(options =>
+{
+    // Sandbox is the only environment this SDK ships; PayPal:Environment is validated/logged, not switched on.
+    options.Environment = ServerEnvironment.Sandbox;
+    options.Oauth2 = new OAuth2ClientCredentials
+    {
+        ClientId = payPalOptions.ClientId,
+        ClientSecret = payPalOptions.ClientSecret
+    };
+    // Per-attempt timeout; a hung provider ends on the first attempt (timeout rejections are not retried).
+    options.Retry = RetryOptions.Default() with { Timeout = TimeSpan.FromSeconds(30) };
+    // When PayPal:BaseUrl is set it is used verbatim for every call, including the OAuth token request.
+    if (!string.IsNullOrWhiteSpace(payPalOptions.BaseUrl))
+    {
+        options.Server.Default.Sandbox.BaseUrl = payPalOptions.BaseUrl;
+    }
+});
+
+builder.Services.AddScoped<IPayPalPaymentGateway, PayPalPaymentGateway>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IOrderPaymentService, OrderPaymentService>();
+builder.Services.AddScoped<ISavedPaymentMethodService, SavedPaymentMethodService>();
+builder.Services.AddScoped<IReconciliationService, ReconciliationService>();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -125,6 +181,19 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 app.Logger.LogInformation("PublicApi App created...");
+
+// Log the PayPal wiring at startup — environment name, currency, and whether a BaseUrl override is in effect.
+// Never log ClientSecret. A missing credential is surfaced as a warning rather than failing startup.
+app.Logger.LogInformation("PayPal configured: Environment={Environment}, Currency={Currency}, BaseUrlOverride={HasBaseUrl}",
+    payPalOptions.Environment, payPalOptions.Currency, !string.IsNullOrWhiteSpace(payPalOptions.BaseUrl));
+if (string.IsNullOrWhiteSpace(payPalOptions.ClientId) || string.IsNullOrWhiteSpace(payPalOptions.ClientSecret))
+{
+    app.Logger.LogWarning("PayPal credentials are not configured; payment operations will fail until PayPal:ClientId/ClientSecret are set.");
+}
+if (!string.Equals(payPalOptions.Environment, "Sandbox", StringComparison.OrdinalIgnoreCase))
+{
+    app.Logger.LogWarning("PayPal:Environment is '{Environment}'; this SDK only targets Sandbox. Use PayPal:BaseUrl to point at another host.", payPalOptions.Environment);
+}
 
 app.Logger.LogInformation("Seeding Database...");
 
