@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Ardalis.GuardClauses;
+using Microsoft.eShopWeb.ApplicationCore.Exceptions;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
 
 namespace Microsoft.eShopWeb.ApplicationCore.Entities.OrderAggregate;
@@ -22,6 +23,7 @@ public class Order : BaseEntity, IAggregateRoot
     public string BuyerId { get; private set; }
     public DateTimeOffset OrderDate { get; private set; } = DateTimeOffset.Now;
     public Address ShipToAddress { get; private set; }
+    public OrderStatus Status { get; private set; } = OrderStatus.AwaitingPayment;
 
     // DDD Patterns comment
     // Using a private collection field, better for DDD Aggregate's encapsulation
@@ -43,5 +45,33 @@ public class Order : BaseEntity, IAggregateRoot
             total += item.UnitPrice * item.Units;
         }
         return total;
+    }
+
+    public void MarkAuthorized()
+    {
+        if (Status != OrderStatus.AwaitingPayment)
+            throw new InvalidOrderStateException(Id, Status, OrderStatus.Authorized);
+        Status = OrderStatus.Authorized;
+    }
+
+    public void MarkFulfilled()
+    {
+        if (Status != OrderStatus.Authorized)
+            throw new InvalidOrderStateException(Id, Status, OrderStatus.Fulfilled);
+        Status = OrderStatus.Fulfilled;
+    }
+
+    public void MarkCancelled()
+    {
+        if (Status != OrderStatus.Authorized)
+            throw new InvalidOrderStateException(Id, Status, OrderStatus.Cancelled);
+        Status = OrderStatus.Cancelled;
+    }
+
+    public void MarkRefunded(bool isFullRefund)
+    {
+        if (Status != OrderStatus.Fulfilled && Status != OrderStatus.PartiallyRefunded)
+            throw new InvalidOrderStateException(Id, Status, OrderStatus.Refunded);
+        Status = isFullRefund ? OrderStatus.Refunded : OrderStatus.PartiallyRefunded;
     }
 }
