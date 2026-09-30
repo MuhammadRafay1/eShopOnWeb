@@ -6,6 +6,11 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="AsadAli.Checkout.Sdk" />
+		<!-- Force AsadAli.Checkout.Sdk's floating transitive Microsoft.Extensions.* deps down to the
+		     net8.0-compatible versions pinned in Directory.Packages.props. -->
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
 		<PackageReference Include="Ardalis.Specification.EntityFrameworkCore" />
 		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
