@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Ardalis.GuardClauses;
+using Microsoft.eShopWeb.ApplicationCore.Exceptions;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
 
 namespace Microsoft.eShopWeb.ApplicationCore.Entities.OrderAggregate;
@@ -43,5 +44,52 @@ public class Order : BaseEntity, IAggregateRoot
             total += item.UnitPrice * item.Units;
         }
         return total;
+    }
+
+    public PaymentStatus PaymentStatus { get; private set; } = PaymentStatus.AwaitingPayment;
+
+    public void MarkAuthorized()
+    {
+        if (PaymentStatus != PaymentStatus.AwaitingPayment && PaymentStatus != PaymentStatus.AuthorizationFailed)
+        {
+            throw new InvalidPaymentTransitionException(PaymentStatus.ToString(), "authorize");
+        }
+        PaymentStatus = PaymentStatus.Authorized;
+    }
+
+    public void MarkAuthorizationFailed()
+    {
+        if (PaymentStatus != PaymentStatus.AwaitingPayment && PaymentStatus != PaymentStatus.AuthorizationFailed)
+        {
+            throw new InvalidPaymentTransitionException(PaymentStatus.ToString(), "authorize");
+        }
+        PaymentStatus = PaymentStatus.AuthorizationFailed;
+    }
+
+    public void MarkCaptured()
+    {
+        if (PaymentStatus != PaymentStatus.Authorized)
+        {
+            throw new InvalidPaymentTransitionException(PaymentStatus.ToString(), "fulfil");
+        }
+        PaymentStatus = PaymentStatus.Captured;
+    }
+
+    public void MarkCancelled()
+    {
+        if (PaymentStatus != PaymentStatus.Authorized)
+        {
+            throw new InvalidPaymentTransitionException(PaymentStatus.ToString(), "cancel");
+        }
+        PaymentStatus = PaymentStatus.Cancelled;
+    }
+
+    public void MarkRefunded(bool full)
+    {
+        if (PaymentStatus != PaymentStatus.Captured && PaymentStatus != PaymentStatus.PartiallyRefunded)
+        {
+            throw new InvalidPaymentTransitionException(PaymentStatus.ToString(), "refund");
+        }
+        PaymentStatus = full ? PaymentStatus.Refunded : PaymentStatus.PartiallyRefunded;
     }
 }

@@ -6,12 +6,14 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.eShopWeb;
+using Microsoft.eShopWeb.ApplicationCore.Configuration;
 using Microsoft.eShopWeb.ApplicationCore.Constants;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
 using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
+using Microsoft.eShopWeb.Infrastructure.PayPal;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
 using Microsoft.Extensions.Configuration;
@@ -31,6 +33,51 @@ builder.Services.AddEndpoints();
 builder.Configuration.AddConfigurationFile("appsettings.test.json");
 builder.Logging.AddConsole();
 
+// PayPal credentials arrive as flat environment variables (PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET,
+// PAYPAL_ENVIRONMENT, PAYPAL_CURRENCY) rather than the PayPal__ / PayPal: shape ASP.NET's default
+// environment-variable provider expects. Map them onto the mandated PayPal:* keys here - but only
+// for keys nothing else already supplied, so real PayPal:* configuration (appsettings, PayPal__*
+// env vars) still wins when present. No secret value is ever written to a file in this repo.
+var payPalEnvVarToConfigKey = new (string EnvVar, string ConfigKey)[]
+{
+    ("PAYPAL_CLIENT_ID", $"{PayPalSettings.SECTION_NAME}:ClientId"),
+    ("PAYPAL_CLIENT_SECRET", $"{PayPalSettings.SECTION_NAME}:ClientSecret"),
+    ("PAYPAL_ENVIRONMENT", $"{PayPalSettings.SECTION_NAME}:Environment"),
+    ("PAYPAL_CURRENCY", $"{PayPalSettings.SECTION_NAME}:Currency"),
+};
+var payPalFallbackConfig = new Dictionary<string, string?>();
+foreach (var (envVar, configKey) in payPalEnvVarToConfigKey)
+{
+    if (!string.IsNullOrEmpty(builder.Configuration[configKey]))
+    {
+        continue;
+    }
+    var value = Environment.GetEnvironmentVariable(envVar);
+    if (!string.IsNullOrEmpty(value))
+    {
+        payPalFallbackConfig[configKey] = value;
+    }
+}
+if (payPalFallbackConfig.Count > 0)
+{
+    builder.Configuration.AddInMemoryCollection(payPalFallbackConfig);
+}
+
+builder.Services.Configure<PayPalSettings>(builder.Configuration.GetSection(PayPalSettings.SECTION_NAME));
+
+var payPalSettingsAtStartup = builder.Configuration.GetSection(PayPalSettings.SECTION_NAME).Get<PayPalSettings>() ?? new PayPalSettings();
+if (string.IsNullOrWhiteSpace(payPalSettingsAtStartup.ClientId) ||
+    string.IsNullOrWhiteSpace(payPalSettingsAtStartup.ClientSecret) ||
+    string.IsNullOrWhiteSpace(payPalSettingsAtStartup.Environment) ||
+    string.IsNullOrWhiteSpace(payPalSettingsAtStartup.Currency))
+{
+    throw new InvalidOperationException(
+        "PayPal configuration is incomplete. Set PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_ENVIRONMENT and PAYPAL_CURRENCY " +
+        "(or the equivalent PayPal:* configuration) before starting PublicApi.");
+}
+// Validates Environment/BaseUrl resolve to a usable address - throws immediately if not.
+PayPalBaseUrlResolver.Resolve(payPalSettingsAtStartup);
+
 Microsoft.eShopWeb.Infrastructure.Dependencies.ConfigureServices(builder.Configuration, builder.Services);
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
@@ -44,6 +91,11 @@ var catalogSettings = builder.Configuration.Get<CatalogSettings>() ?? new Catalo
 builder.Services.AddSingleton<IUriComposer>(new UriComposer(catalogSettings));
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(LoggerAdapter<>));
 builder.Services.AddScoped<ITokenClaimsService, IdentityTokenClaimService>();
+
+builder.Services.AddSingleton<PayPalAccessTokenCache>();
+builder.Services.AddHttpClient<IPayPalClient, PayPalClient>();
+builder.Services.AddScoped<IApiOrderService, ApiOrderService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
 
 var configSection = builder.Configuration.GetRequiredSection(BaseUrlConfiguration.CONFIG_NAME);
 builder.Services.Configure<BaseUrlConfiguration>(configSection);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Threading.Tasks;
 using BlazorShared.Models;
@@ -24,7 +24,7 @@ public class ExceptionMiddleware
         }
         catch (Exception ex)
         {
-            await HandleExceptionAsync(httpContext, ex);        
+            await HandleExceptionAsync(httpContext, ex);
         }
     }
 
@@ -32,23 +32,57 @@ public class ExceptionMiddleware
     {
         context.Response.ContentType = "application/json";
 
-        if (exception is DuplicateException duplicationException)
+        var (statusCode, message) = Classify(exception);
+        context.Response.StatusCode = statusCode;
+        await context.Response.WriteAsync(new ErrorDetails
         {
-            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = duplicationException.Message
-            }.ToString());
-        }
-        else
+            StatusCode = statusCode,
+            Message = message
+        }.ToString());
+    }
+
+    private static (int StatusCode, string Message) Classify(Exception exception) => exception switch
+    {
+        DuplicateException => ((int)HttpStatusCode.Conflict, exception.Message),
+
+        OrderNotFoundException or PaymentMethodNotFoundException or CatalogItemNotFoundException
+            => ((int)HttpStatusCode.NotFound, exception.Message),
+
+        InvalidPaymentTransitionException or AuthorizationNotRenewableException
+            => ((int)HttpStatusCode.Conflict, exception.Message),
+
+        RefundExceedsCapturedException or PaymentChallengeRequiredException
+            => ((int)HttpStatusCode.UnprocessableEntity, exception.Message),
+
+        PaymentDeclinedException => ((int)HttpStatusCode.PaymentRequired, exception.Message),
+
+        ArgumentException => ((int)HttpStatusCode.BadRequest, exception.Message),
+
+        PayPalApiException payPalEx => ClassifyPayPalException(payPalEx),
+
+        _ => ((int)HttpStatusCode.InternalServerError, exception.Message)
+    };
+
+    private static (int StatusCode, string Message) ClassifyPayPalException(PayPalApiException ex)
+    {
+        // debug_id/name are safe to surface (never card data) and are what an operator needs to
+        // look the failure up with PayPal support.
+        var message = $"{ex.Message}" +
+            (ex.Name is null ? string.Empty : $" (PayPal error: {ex.Name})") +
+            (ex.DebugId is null ? string.Empty : $" [debug_id={ex.DebugId}]");
+
+        if (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = exception.Message
-            }.ToString());
+            // PayPal rejected our credentials/permissions - an upstream configuration problem,
+            // not something the caller of this API can fix.
+            return ((int)HttpStatusCode.BadGateway, message);
         }
+
+        if ((int)ex.StatusCode is >= 400 and < 500)
+        {
+            return ((int)HttpStatusCode.UnprocessableEntity, message);
+        }
+
+        return ((int)HttpStatusCode.BadGateway, message);
     }
 }

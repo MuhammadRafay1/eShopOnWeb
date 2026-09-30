@@ -1,0 +1,21 @@
+using System;
+
+namespace Microsoft.eShopWeb.PublicApi.OrderEndpoints;
+
+public class RefundOrderResponse : BaseResponse
+{
+    public RefundOrderResponse(Guid correlationId) : base(correlationId)
+    {
+    }
+
+    public RefundOrderResponse()
+    {
+    }
+
+    public string RefundId { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string PaymentStatus { get; set; } = string.Empty;
+    public decimal TotalRefunded { get; set; }
+    public decimal RefundableRemaining { get; set; }
+}
