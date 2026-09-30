@@ -23,6 +23,56 @@ public class Order : BaseEntity, IAggregateRoot
     public DateTimeOffset OrderDate { get; private set; } = DateTimeOffset.Now;
     public Address ShipToAddress { get; private set; }
 
+    // Payment / fulfilment lifecycle. Defaults to AwaitingPayment so the existing
+    // constructor and existing Web-created rows keep working unchanged. Transitions
+    // happen only through the methods below, called from the PublicApi payment endpoints.
+    public OrderStatus Status { get; private set; } = OrderStatus.AwaitingPayment;
+
+    public void MarkPaymentAuthorized()
+    {
+        if (Status != OrderStatus.AwaitingPayment)
+        {
+            throw new InvalidOperationException($"Cannot authorize payment for an order in state {Status}.");
+        }
+        Status = OrderStatus.PaymentAuthorized;
+    }
+
+    public void MarkFulfilled()
+    {
+        if (Status != OrderStatus.PaymentAuthorized)
+        {
+            throw new InvalidOperationException($"Cannot fulfil an order in state {Status}.");
+        }
+        Status = OrderStatus.Fulfilled;
+    }
+
+    public void MarkCancelled()
+    {
+        if (Status != OrderStatus.AwaitingPayment && Status != OrderStatus.PaymentAuthorized)
+        {
+            throw new InvalidOperationException($"Cannot cancel an order in state {Status}.");
+        }
+        Status = OrderStatus.Cancelled;
+    }
+
+    public void MarkPartiallyRefunded()
+    {
+        if (Status != OrderStatus.Fulfilled && Status != OrderStatus.PartiallyRefunded)
+        {
+            throw new InvalidOperationException($"Cannot refund an order in state {Status}.");
+        }
+        Status = OrderStatus.PartiallyRefunded;
+    }
+
+    public void MarkRefunded()
+    {
+        if (Status != OrderStatus.Fulfilled && Status != OrderStatus.PartiallyRefunded)
+        {
+            throw new InvalidOperationException($"Cannot refund an order in state {Status}.");
+        }
+        Status = OrderStatus.Refunded;
+    }
+
     // DDD Patterns comment
     // Using a private collection field, better for DDD Aggregate's encapsulation
     // so OrderItems cannot be added from "outside the AggregateRoot" directly to the collection,

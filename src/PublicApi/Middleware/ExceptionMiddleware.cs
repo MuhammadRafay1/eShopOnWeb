@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Threading.Tasks;
 using BlazorShared.Models;
@@ -24,7 +24,7 @@ public class ExceptionMiddleware
         }
         catch (Exception ex)
         {
-            await HandleExceptionAsync(httpContext, ex);        
+            await HandleExceptionAsync(httpContext, ex);
         }
     }
 
@@ -32,23 +32,38 @@ public class ExceptionMiddleware
     {
         context.Response.ContentType = "application/json";
 
-        if (exception is DuplicateException duplicationException)
+        var (statusCode, message) = Map(exception);
+        context.Response.StatusCode = statusCode;
+
+        await context.Response.WriteAsync(new ErrorDetails()
         {
-            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = duplicationException.Message
-            }.ToString());
-        }
-        else
-        {
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = exception.Message
-            }.ToString());
-        }
+            StatusCode = statusCode,
+            Message = message
+        }.ToString());
+    }
+
+    private static (int statusCode, string message) Map(Exception exception) => exception switch
+    {
+        BadRequestException => ((int)HttpStatusCode.BadRequest, exception.Message),
+        NotFoundException => ((int)HttpStatusCode.NotFound, exception.Message),
+        ConflictException => ((int)HttpStatusCode.Conflict, exception.Message),
+        DuplicateException => ((int)HttpStatusCode.Conflict, exception.Message),
+        UnprocessableEntityException => (422, exception.Message),
+        PayPalChallengeRequiredException => (422, exception.Message),
+        PayPalApiException papEx => (MapPayPal(papEx), Describe(papEx)),
+        _ => ((int)HttpStatusCode.InternalServerError, exception.Message)
+    };
+
+    private static int MapPayPal(PayPalApiException ex) => ex.HttpStatusCode switch
+    {
+        429 => (int)HttpStatusCode.ServiceUnavailable,   // 503 — retryable
+        >= 500 => (int)HttpStatusCode.BadGateway,         // 502 — upstream failure
+        _ => 422                                          // 4xx business/validation (e.g. card declined)
+    };
+
+    private static string Describe(PayPalApiException ex)
+    {
+        var issues = ex.DescribeIssues();
+        return ex.DebugId is null ? issues : $"{issues} (PayPal debug_id: {ex.DebugId})";
     }
 }

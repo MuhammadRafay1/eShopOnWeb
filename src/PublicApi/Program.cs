@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using BlazorShared;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -84,6 +85,26 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 builder.Configuration.AddEnvironmentVariables();
+
+// Bridge the task's single-underscore env vars (PAYPAL_CLIENT_ID, ...) onto the
+// PayPal: configuration section. ASP.NET Core only auto-maps the double-underscore
+// form (PayPal__ClientId), so these four need an explicit bridge. Added last so it
+// overrides the empty placeholders in appsettings.json. Only names are referenced
+// here; the values live only in the environment / user-secrets, never in the repo.
+var paypalEnvBridge = new Dictionary<string, string?>
+{
+    ["PayPal:ClientId"] = Environment.GetEnvironmentVariable("PAYPAL_CLIENT_ID"),
+    ["PayPal:ClientSecret"] = Environment.GetEnvironmentVariable("PAYPAL_CLIENT_SECRET"),
+    ["PayPal:Environment"] = Environment.GetEnvironmentVariable("PAYPAL_ENVIRONMENT"),
+    ["PayPal:Currency"] = Environment.GetEnvironmentVariable("PAYPAL_CURRENCY"),
+};
+builder.Configuration.AddInMemoryCollection(
+    paypalEnvBridge.Where(kv => !string.IsNullOrEmpty(kv.Value)));
+
+builder.Services.Configure<Microsoft.eShopWeb.Infrastructure.Services.PayPal.PayPalOptions>(
+    builder.Configuration.GetSection(Microsoft.eShopWeb.Infrastructure.Services.PayPal.PayPalOptions.SectionName));
+builder.Services.AddHttpClient<IPayPalClient, Microsoft.eShopWeb.Infrastructure.Services.PayPal.PayPalClient>();
+builder.Services.AddScoped<IPaymentService, Microsoft.eShopWeb.Infrastructure.Services.PayPal.PaymentService>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
