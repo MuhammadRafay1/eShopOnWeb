@@ -7,11 +7,14 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.eShopWeb;
 using Microsoft.eShopWeb.ApplicationCore.Constants;
+using Microsoft.eShopWeb.ApplicationCore.Entities.PaymentMethodAggregate;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
+using Microsoft.eShopWeb.ApplicationCore.PayPal;
 using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
+using Microsoft.eShopWeb.Infrastructure.Services.PayPal;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
 using Microsoft.Extensions.Configuration;
@@ -50,6 +53,34 @@ builder.Services.Configure<BaseUrlConfiguration>(configSection);
 var baseUrlConfig = configSection.Get<BaseUrlConfiguration>();
 
 builder.Services.AddMemoryCache();
+
+// The PayPal sandbox credentials are normally loaded into .NET user-secrets (see README) under the
+// "PayPal:" section, which WebApplication.CreateBuilder already wires up automatically in Development
+// via this project's UserSecretsId. As a fallback for environments without user-secrets (e.g. a
+// non-Development run), also map the PAYPAL_* env vars (single underscore - they don't auto-bind to
+// "PayPal:Xxx") onto the same section, but only for variables that are actually set, so this never
+// overrides a value that came from user-secrets/appsettings with a null. No value is ever hard-coded here.
+var payPalEnvOverrides = new Dictionary<string, string?>();
+void AddIfSet(string configKey, string envVarName)
+{
+    var value = Environment.GetEnvironmentVariable(envVarName);
+    if (!string.IsNullOrEmpty(value)) payPalEnvOverrides[configKey] = value;
+}
+AddIfSet("PayPal:ClientId", "PAYPAL_CLIENT_ID");
+AddIfSet("PayPal:ClientSecret", "PAYPAL_CLIENT_SECRET");
+AddIfSet("PayPal:Environment", "PAYPAL_ENVIRONMENT");
+AddIfSet("PayPal:Currency", "PAYPAL_CURRENCY");
+if (payPalEnvOverrides.Count > 0)
+{
+    builder.Configuration.AddInMemoryCollection(payPalEnvOverrides);
+}
+builder.Services.Configure<PayPalSettings>(builder.Configuration.GetSection(PayPalSettings.CONFIG_NAME));
+builder.Services.AddHttpClient<IPayPalGateway, PayPalGateway>();
+builder.Services.AddSingleton<IOrderLockProvider, OrderLockProvider>();
+builder.Services.AddScoped<IOrderPlacementService, OrderPlacementService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<ISavedCardService, SavedCardService>();
+builder.Services.AddScoped<IReconciliationService, ReconciliationService>();
 
 var key = Encoding.ASCII.GetBytes(AuthorizationConstants.JWT_SECRET_KEY);
 builder.Services.AddAuthentication(config =>

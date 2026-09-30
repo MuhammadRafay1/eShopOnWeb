@@ -1,0 +1,6 @@
+namespace Microsoft.eShopWeb.ApplicationCore.PayPal;
+
+public record PayPalRefundResult(
+    string RefundId,
+    string Status,
+    decimal RefundedAmount);

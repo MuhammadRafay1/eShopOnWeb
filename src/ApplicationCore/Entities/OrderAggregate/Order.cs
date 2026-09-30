@@ -22,6 +22,8 @@ public class Order : BaseEntity, IAggregateRoot
     public string BuyerId { get; private set; }
     public DateTimeOffset OrderDate { get; private set; } = DateTimeOffset.Now;
     public Address ShipToAddress { get; private set; }
+    public OrderStatus Status { get; private set; } = OrderStatus.AwaitingPayment;
+    public Payment? Payment { get; private set; }
 
     // DDD Patterns comment
     // Using a private collection field, better for DDD Aggregate's encapsulation
@@ -44,4 +46,92 @@ public class Order : BaseEntity, IAggregateRoot
         }
         return total;
     }
+
+    /// <summary>
+    /// Records a successful authorization (hold) of the order total. Idempotent: calling this again
+    /// while already <see cref="OrderStatus.Authorized"/> or beyond is a no-op for the status, but the
+    /// caller should not normally call it again once authorized (see <see cref="IsAuthorized"/>).
+    /// </summary>
+    public void MarkAuthorized(string currency, string payPalOrderId, string authorizationId, string status, DateTimeOffset? expiresAt)
+    {
+        if (Status != OrderStatus.AwaitingPayment)
+        {
+            throw new InvalidOperationException($"Order {Id} cannot be authorized from status {Status}.");
+        }
+
+        Payment ??= new Payment(currency);
+        Payment.MarkAuthorized(payPalOrderId, authorizationId, status, expiresAt);
+        Status = OrderStatus.Authorized;
+    }
+
+    public bool IsAuthorized => Status == OrderStatus.Authorized && Payment?.AuthorizationId is not null;
+
+    public void ReplaceAuthorization(string authorizationId, string status, DateTimeOffset? expiresAt)
+    {
+        if (Payment is null)
+        {
+            throw new InvalidOperationException($"Order {Id} has no payment to reauthorize.");
+        }
+
+        Payment.ReplaceAuthorization(authorizationId, status, expiresAt);
+    }
+
+    public void MarkFulfilled(string captureId, decimal capturedAmount, decimal payPalFee, decimal netAmount)
+    {
+        if (Status != OrderStatus.Authorized)
+        {
+            throw new InvalidOperationException($"Order {Id} cannot be fulfilled from status {Status}.");
+        }
+
+        Payment!.MarkCaptured(captureId, "COMPLETED", capturedAmount, payPalFee, netAmount);
+        Status = OrderStatus.Fulfilled;
+    }
+
+    public void MarkCancelled()
+    {
+        if (Status == OrderStatus.Cancelled)
+        {
+            return; // idempotent
+        }
+
+        if (Status != OrderStatus.Authorized)
+        {
+            throw new InvalidOperationException($"Order {Id} cannot be cancelled from status {Status}. Use a refund once fulfilled.");
+        }
+
+        Payment!.MarkVoided();
+        Status = OrderStatus.Cancelled;
+    }
+
+    public Refund AddRefund(string payPalRefundId, decimal amount, string status, string idempotencyKey)
+    {
+        if (Payment?.CaptureId is null)
+        {
+            throw new InvalidOperationException($"Order {Id} has not been fulfilled; nothing to refund.");
+        }
+
+        if (amount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(amount), "Refund amount must be positive.");
+        }
+
+        if (Payment.TotalRefunded() + amount > Payment.CapturedAmount!.Value)
+        {
+            throw new InvalidOperationException(
+                $"Order {Id} refund of {amount} would exceed the captured amount of {Payment.CapturedAmount.Value} (already refunded {Payment.TotalRefunded()}).");
+        }
+
+        var refund = new Refund(payPalRefundId, amount, status, idempotencyKey);
+        Payment.AddRefund(refund);
+
+        Status = Payment.RefundableRemaining() <= 0m ? OrderStatus.Refunded : OrderStatus.PartiallyRefunded;
+
+        return refund;
+    }
+
+    public decimal TotalRefunded() => Payment?.TotalRefunded() ?? 0m;
+
+    public decimal RefundableRemaining() => Payment?.RefundableRemaining() ?? 0m;
+
+    public Refund? FindRefundByKey(string idempotencyKey) => Payment?.FindRefundByKey(idempotencyKey);
 }
