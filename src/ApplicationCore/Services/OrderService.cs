@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Ardalis.GuardClauses;
 using Microsoft.eShopWeb.ApplicationCore.Entities;
@@ -49,5 +50,28 @@ public class OrderService : IOrderService
         var order = new Order(basket.BuyerId, shippingAddress, items);
 
         await _orderRepository.AddAsync(order);
+    }
+
+    public async Task<Order> CreateOrderAsync(string buyerId, IEnumerable<OrderItemRequest> items, Address shipToAddress)
+    {
+        Guard.Against.NullOrEmpty(buyerId, nameof(buyerId));
+        var itemRequests = items.ToList();
+        Guard.Against.NullOrEmpty(itemRequests, nameof(items));
+
+        var catalogItemIds = itemRequests.Select(i => i.CatalogItemId).Distinct().ToArray();
+        var catalogItemsSpecification = new CatalogItemsSpecification(catalogItemIds);
+        var catalogItems = await _itemRepository.ListAsync(catalogItemsSpecification);
+
+        var orderItems = itemRequests.Select(itemRequest =>
+        {
+            var catalogItem = catalogItems.FirstOrDefault(c => c.Id == itemRequest.CatalogItemId);
+            Guard.Against.Null(catalogItem, nameof(catalogItem));
+            var itemOrdered = new CatalogItemOrdered(catalogItem!.Id, catalogItem.Name, _uriComposer.ComposePicUri(catalogItem.PictureUri));
+            return new OrderItem(itemOrdered, catalogItem.Price, itemRequest.Quantity);
+        }).ToList();
+
+        var order = new Order(buyerId, shipToAddress, orderItems);
+
+        return await _orderRepository.AddAsync(order);
     }
 }

@@ -32,23 +32,25 @@ public class ExceptionMiddleware
     {
         context.Response.ContentType = "application/json";
 
-        if (exception is DuplicateException duplicationException)
+        context.Response.StatusCode = (int)StatusCodeFor(exception);
+        await context.Response.WriteAsync(new ErrorDetails()
         {
-            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = duplicationException.Message
-            }.ToString());
-        }
-        else
-        {
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = exception.Message
-            }.ToString());
-        }
+            StatusCode = context.Response.StatusCode,
+            Message = exception.Message
+        }.ToString());
     }
+
+    private static HttpStatusCode StatusCodeFor(Exception exception) => exception switch
+    {
+        DuplicateException => HttpStatusCode.Conflict,
+        ResourceNotFoundException => HttpStatusCode.NotFound,
+        RefundExceedsCapturedAmountException => HttpStatusCode.UnprocessableEntity,
+        AuthorizationRenewalFailedException => HttpStatusCode.Conflict,
+        PaymentConflictException => HttpStatusCode.Conflict,
+        // Order matters: PayPalBrowserChallengeException derives from PayPalOperationException.
+        PayPalBrowserChallengeException => HttpStatusCode.UnprocessableEntity,
+        PayPalOperationException => HttpStatusCode.BadGateway,
+        ArgumentException => HttpStatusCode.BadRequest,
+        _ => HttpStatusCode.InternalServerError
+    };
 }

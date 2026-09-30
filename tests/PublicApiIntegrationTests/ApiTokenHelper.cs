@@ -26,6 +26,13 @@ namespace PublicApiIntegrationTests
             return CreateToken(userName, roles);
         }
 
+        /// <summary>
+        /// Mints a token for an arbitrary shopper identity, for testing cross-shopper ownership
+        /// isolation. PublicApi's JWT auth trusts the signed token's claim, not a DB lookup, so
+        /// this identity does not need to be seeded.
+        /// </summary>
+        public static string GetTokenForUser(string userName) => CreateToken(userName, Array.Empty<string>());
+
         private static string CreateToken(string userName, string[] roles)
         {
             var claims = new List<Claim> { new Claim(ClaimTypes.Name, userName) };
