@@ -12,6 +12,7 @@ using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
+using Microsoft.eShopWeb.Infrastructure.Payments;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
 using Microsoft.Extensions.Configuration;
@@ -31,7 +32,30 @@ builder.Services.AddEndpoints();
 builder.Configuration.AddConfigurationFile("appsettings.test.json");
 builder.Logging.AddConsole();
 
+// PAYPAL_CLIENT_ID/PAYPAL_CLIENT_SECRET/PAYPAL_ENVIRONMENT/PAYPAL_CURRENCY arrive as flat env vars;
+// AddEnvironmentVariables() maps them to flat config keys, not the nested "PayPal:*" keys the
+// PayPalOptions binding expects, so re-expose them under those keys explicitly. Values never touch
+// a file in this repo — they come from the environment (or user-secrets in Development) only.
+var payPalEnvConfig = new Dictionary<string, string?>();
+void MapPayPalEnvVar(string envVarName, string configKey)
+{
+    var value = Environment.GetEnvironmentVariable(envVarName);
+    if (!string.IsNullOrEmpty(value))
+    {
+        payPalEnvConfig[configKey] = value;
+    }
+}
+MapPayPalEnvVar("PAYPAL_CLIENT_ID", "PayPal:ClientId");
+MapPayPalEnvVar("PAYPAL_CLIENT_SECRET", "PayPal:ClientSecret");
+MapPayPalEnvVar("PAYPAL_ENVIRONMENT", "PayPal:Environment");
+MapPayPalEnvVar("PAYPAL_CURRENCY", "PayPal:Currency");
+builder.Configuration.AddInMemoryCollection(payPalEnvConfig);
+
 Microsoft.eShopWeb.Infrastructure.Dependencies.ConfigureServices(builder.Configuration, builder.Services);
+builder.Services.AddPayPalIntegration(builder.Configuration);
+builder.Services.AddScoped<IOrderPaymentService, OrderPaymentService>();
+builder.Services.AddScoped<ISavedCardService, SavedCardService>();
+builder.Services.AddScoped<IReconciliationService, ReconciliationService>();
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
         .AddEntityFrameworkStores<AppIdentityDbContext>()

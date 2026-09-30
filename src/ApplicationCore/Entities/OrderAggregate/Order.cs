@@ -22,6 +22,8 @@ public class Order : BaseEntity, IAggregateRoot
     public string BuyerId { get; private set; }
     public DateTimeOffset OrderDate { get; private set; } = DateTimeOffset.Now;
     public Address ShipToAddress { get; private set; }
+    public OrderPaymentStatus PaymentStatus { get; private set; } = OrderPaymentStatus.AwaitingPayment;
+    public Payment? Payment { get; private set; }
 
     // DDD Patterns comment
     // Using a private collection field, better for DDD Aggregate's encapsulation
@@ -43,5 +45,50 @@ public class Order : BaseEntity, IAggregateRoot
             total += item.UnitPrice * item.Units;
         }
         return total;
+    }
+
+    public void AttachAuthorization(Payment payment)
+    {
+        if (PaymentStatus != OrderPaymentStatus.AwaitingPayment)
+        {
+            throw new InvalidOperationException($"Cannot attach an authorization to an order in status {PaymentStatus}.");
+        }
+
+        Payment = payment;
+        PaymentStatus = OrderPaymentStatus.Authorized;
+    }
+
+    public void MarkFulfilled()
+    {
+        if (PaymentStatus != OrderPaymentStatus.Authorized)
+        {
+            throw new InvalidOperationException($"Cannot fulfil an order in status {PaymentStatus}.");
+        }
+
+        PaymentStatus = OrderPaymentStatus.Fulfilled;
+    }
+
+    public void MarkCancelled()
+    {
+        if (PaymentStatus != OrderPaymentStatus.AwaitingPayment && PaymentStatus != OrderPaymentStatus.Authorized)
+        {
+            throw new InvalidOperationException($"Cannot cancel an order in status {PaymentStatus}.");
+        }
+
+        PaymentStatus = OrderPaymentStatus.Cancelled;
+    }
+
+    public void ApplyRefund()
+    {
+        if (PaymentStatus != OrderPaymentStatus.Fulfilled && PaymentStatus != OrderPaymentStatus.PartiallyRefunded)
+        {
+            throw new InvalidOperationException($"Cannot refund an order in status {PaymentStatus}.");
+        }
+
+        Guard.Against.Null(Payment, nameof(Payment));
+
+        PaymentStatus = Payment.RefundableRemaining() <= 0m
+            ? OrderPaymentStatus.Refunded
+            : OrderPaymentStatus.PartiallyRefunded;
     }
 }
