@@ -31,7 +31,30 @@ builder.Services.AddEndpoints();
 builder.Configuration.AddConfigurationFile("appsettings.test.json");
 builder.Logging.AddConsole();
 
+// PayPal credentials arrive as single-underscore env vars (PAYPAL_CLIENT_ID, etc.), which the
+// default double-underscore env var provider (PayPal__ClientId) will not bind. Map them onto the
+// "PayPal:" configuration keys explicitly, added last so they take precedence over any stale
+// user-secrets/appsettings value - this is what lets the same build run against a different
+// PayPal account purely by changing the environment. Secret values are read only from the
+// environment/user-secrets; none are ever written into a file in this repository.
+var payPalConfig = new Dictionary<string, string?>();
+void MapPayPalEnvVar(string envVarName, string configKey)
+{
+    var value = Environment.GetEnvironmentVariable(envVarName);
+    if (!string.IsNullOrWhiteSpace(value))
+    {
+        payPalConfig[configKey] = value;
+    }
+}
+MapPayPalEnvVar("PAYPAL_CLIENT_ID", "PayPal:ClientId");
+MapPayPalEnvVar("PAYPAL_CLIENT_SECRET", "PayPal:ClientSecret");
+MapPayPalEnvVar("PAYPAL_ENVIRONMENT", "PayPal:Environment");
+MapPayPalEnvVar("PAYPAL_CURRENCY", "PayPal:Currency");
+MapPayPalEnvVar("PAYPAL_BASE_URL", "PayPal:BaseUrl");
+builder.Configuration.AddInMemoryCollection(payPalConfig);
+
 Microsoft.eShopWeb.Infrastructure.Dependencies.ConfigureServices(builder.Configuration, builder.Services);
+builder.Services.AddPayPalIntegration(builder.Configuration);
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
         .AddEntityFrameworkStores<AppIdentityDbContext>()
