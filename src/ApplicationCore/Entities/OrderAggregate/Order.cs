@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Ardalis.GuardClauses;
+using Microsoft.eShopWeb.ApplicationCore.Entities.PaymentAggregate;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
 
 namespace Microsoft.eShopWeb.ApplicationCore.Entities.OrderAggregate;
@@ -22,6 +23,23 @@ public class Order : BaseEntity, IAggregateRoot
     public string BuyerId { get; private set; }
     public DateTimeOffset OrderDate { get; private set; } = DateTimeOffset.Now;
     public Address ShipToAddress { get; private set; }
+
+    /// <summary>
+    /// Payment/fulfilment lifecycle state. A newly placed order awaits payment.
+    /// </summary>
+    public OrderStatus Status { get; private set; } = OrderStatus.AwaitingPayment;
+
+    /// <summary>
+    /// The payment attached to this order once the shopper pays. Null until <c>pay</c> is called.
+    /// One-to-one; <see cref="Payment.OrderId"/> is the (unique) foreign key.
+    /// </summary>
+    public Payment? Payment { get; private set; }
+
+    /// <summary>
+    /// Moves the order to a new lifecycle state. Transition validity is enforced by the
+    /// application payment service, which owns the state machine.
+    /// </summary>
+    public void SetStatus(OrderStatus status) => Status = status;
 
     // DDD Patterns comment
     // Using a private collection field, better for DDD Aggregate's encapsulation

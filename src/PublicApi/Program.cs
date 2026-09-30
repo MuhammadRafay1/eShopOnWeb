@@ -12,6 +12,7 @@ using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
+using Microsoft.eShopWeb.Infrastructure.PayPal;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
 using Microsoft.Extensions.Configuration;
@@ -84,6 +85,30 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 builder.Configuration.AddEnvironmentVariables();
+
+// Bridge the task's single-underscore PayPal environment variables to the PayPal: config section.
+// ASP.NET Core's environment-variable provider only auto-binds double-underscore names, so
+// PAYPAL_CLIENT_ID etc. would otherwise never reach PayPal:ClientId. Only keys for variables that
+// are actually present are added, so this never clobbers a value supplied via user-secrets or
+// appsettings in another environment. Credential VALUES only ever come from the environment /
+// user-secrets — never from a file in the repository.
+var payPalOverrides = new Dictionary<string, string?>();
+void MapPayPalEnv(string environmentVariable, string configKey)
+{
+    var value = Environment.GetEnvironmentVariable(environmentVariable);
+    if (!string.IsNullOrEmpty(value)) payPalOverrides[configKey] = value;
+}
+MapPayPalEnv("PAYPAL_CLIENT_ID", "PayPal:ClientId");
+MapPayPalEnv("PAYPAL_CLIENT_SECRET", "PayPal:ClientSecret");
+MapPayPalEnv("PAYPAL_ENVIRONMENT", "PayPal:Environment");
+MapPayPalEnv("PAYPAL_CURRENCY", "PayPal:Currency");
+MapPayPalEnv("PAYPAL_BASE_URL", "PayPal:BaseUrl");
+if (payPalOverrides.Count > 0)
+{
+    builder.Configuration.AddInMemoryCollection(payPalOverrides);
+}
+
+builder.Services.AddPayPalIntegration(builder.Configuration);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>

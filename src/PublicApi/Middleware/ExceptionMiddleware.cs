@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Threading.Tasks;
 using BlazorShared.Models;
@@ -24,7 +24,7 @@ public class ExceptionMiddleware
         }
         catch (Exception ex)
         {
-            await HandleExceptionAsync(httpContext, ex);        
+            await HandleExceptionAsync(httpContext, ex);
         }
     }
 
@@ -32,23 +32,38 @@ public class ExceptionMiddleware
     {
         context.Response.ContentType = "application/json";
 
-        if (exception is DuplicateException duplicationException)
+        var statusCode = exception switch
         {
-            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = duplicationException.Message
-            }.ToString());
-        }
-        else
+            // Ownership mismatches are surfaced as "not found" so one shopper cannot probe another's ids.
+            OrderNotFoundException => HttpStatusCode.NotFound,
+            PaymentMethodNotFoundException => HttpStatusCode.NotFound,
+
+            // Wrong lifecycle stage / already-renewable-exhausted are operator-actionable conflicts.
+            InvalidOrderStateException => HttpStatusCode.Conflict,
+            AuthorizationNotRenewableException => HttpStatusCode.Conflict,
+            DuplicateException => HttpStatusCode.Conflict,
+
+            // Refund cap and bad request input.
+            RefundAmountExceedsRemainingException => HttpStatusCode.UnprocessableEntity,
+            ArgumentException => HttpStatusCode.BadRequest,
+
+            // A card decline is a normal, shopper-actionable outcome.
+            PayPalPaymentDeclinedException => HttpStatusCode.PaymentRequired,
+
+            // A challenge / upstream PayPal failure is something to escalate, not a client error.
+            PayPalChallengeRequiredException => HttpStatusCode.BadGateway,
+            PayPalApiException => HttpStatusCode.BadGateway,
+
+            _ => HttpStatusCode.InternalServerError
+        };
+
+        context.Response.StatusCode = (int)statusCode;
+        await context.Response.WriteAsync(new ErrorDetails
         {
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = exception.Message
-            }.ToString());
-        }
+            StatusCode = context.Response.StatusCode,
+            Message = statusCode == HttpStatusCode.InternalServerError
+                ? "An unexpected error occurred."
+                : exception.Message
+        }.ToString());
     }
 }
