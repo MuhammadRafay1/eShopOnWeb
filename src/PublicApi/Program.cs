@@ -6,12 +6,14 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.eShopWeb;
+using Microsoft.eShopWeb.ApplicationCore;
 using Microsoft.eShopWeb.ApplicationCore.Constants;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
 using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
+using Microsoft.eShopWeb.Infrastructure.Services.PayPal;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
 using Microsoft.Extensions.Configuration;
@@ -30,6 +32,29 @@ builder.Services.AddEndpoints();
 // Use to force loading of appsettings.json of test project
 builder.Configuration.AddConfigurationFile("appsettings.test.json");
 builder.Logging.AddConsole();
+
+// PAYPAL_* env vars don't follow the .NET double-underscore convention, so map them explicitly onto
+// the PayPal: configuration section before anything binds from it. Only variables that are actually
+// present get mapped -- nothing here hard-codes a value, everything still originates from the
+// environment (or user-secrets in Development).
+var payPalEnvMap = new Dictionary<string, string?>();
+void MapPayPalEnvVar(string envVarName, string configKey)
+{
+    var value = Environment.GetEnvironmentVariable(envVarName);
+    if (!string.IsNullOrEmpty(value))
+    {
+        payPalEnvMap[configKey] = value;
+    }
+}
+MapPayPalEnvVar("PAYPAL_CLIENT_ID", "PayPal:ClientId");
+MapPayPalEnvVar("PAYPAL_CLIENT_SECRET", "PayPal:ClientSecret");
+MapPayPalEnvVar("PAYPAL_ENVIRONMENT", "PayPal:Environment");
+MapPayPalEnvVar("PAYPAL_CURRENCY", "PayPal:Currency");
+MapPayPalEnvVar("PAYPAL_BASE_URL", "PayPal:BaseUrl");
+if (payPalEnvMap.Count > 0)
+{
+    builder.Configuration.AddInMemoryCollection(payPalEnvMap);
+}
 
 Microsoft.eShopWeb.Infrastructure.Dependencies.ConfigureServices(builder.Configuration, builder.Services);
 
@@ -50,6 +75,22 @@ builder.Services.Configure<BaseUrlConfiguration>(configSection);
 var baseUrlConfig = configSection.Get<BaseUrlConfiguration>();
 
 builder.Services.AddMemoryCache();
+
+var payPalSettings = builder.Configuration.GetSection("PayPal").Get<PayPalSettings>() ?? new PayPalSettings();
+if (string.IsNullOrWhiteSpace(payPalSettings.ClientId) ||
+    string.IsNullOrWhiteSpace(payPalSettings.ClientSecret) ||
+    string.IsNullOrWhiteSpace(payPalSettings.Environment) ||
+    string.IsNullOrWhiteSpace(payPalSettings.Currency))
+{
+    throw new InvalidOperationException(
+        "PayPal configuration is incomplete. Set PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_ENVIRONMENT and PAYPAL_CURRENCY (or the equivalent PayPal:* user-secrets/config keys).");
+}
+builder.Services.AddSingleton(payPalSettings);
+builder.Services.AddHttpClient<IPayPalClient, PayPalClient>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+Console.WriteLine($"PayPal configured: environment={payPalSettings.Environment}, currency={payPalSettings.Currency}, baseUrl={payPalSettings.ResolveBaseUrl()}, clientId={RedactPayPalClientId(payPalSettings.ClientId)}");
+
+static string RedactPayPalClientId(string value) => value.Length <= 8 ? "****" : $"{value[..4]}...{value[^4..]}";
 
 var key = Encoding.ASCII.GetBytes(AuthorizationConstants.JWT_SECRET_KEY);
 builder.Services.AddAuthentication(config =>
