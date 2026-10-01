@@ -9,6 +9,7 @@ using Microsoft.eShopWeb;
 using Microsoft.eShopWeb.ApplicationCore.Constants;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
 using Microsoft.eShopWeb.ApplicationCore.Services;
+using Microsoft.eShopWeb.Infrastructure;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
@@ -31,7 +32,32 @@ builder.Services.AddEndpoints();
 builder.Configuration.AddConfigurationFile("appsettings.test.json");
 builder.Logging.AddConsole();
 
+// PAYPAL_* env vars arrive as flat names; surface them into the "PayPal:" config section the settings
+// class binds from. Values never get written to any file - this only reads what's already in the
+// environment. PAYPAL_BASE_URL is optional (overrides the API base address when set).
+var payPalConfigValues = new Dictionary<string, string?>();
+foreach (var (envVar, configKey) in new[]
+         {
+             ("PAYPAL_CLIENT_ID", "PayPal:ClientId"),
+             ("PAYPAL_CLIENT_SECRET", "PayPal:ClientSecret"),
+             ("PAYPAL_ENVIRONMENT", "PayPal:Environment"),
+             ("PAYPAL_CURRENCY", "PayPal:Currency"),
+             ("PAYPAL_BASE_URL", "PayPal:BaseUrl")
+         })
+{
+    var value = Environment.GetEnvironmentVariable(envVar);
+    if (!string.IsNullOrEmpty(value))
+    {
+        payPalConfigValues[configKey] = value;
+    }
+}
+if (payPalConfigValues.Count > 0)
+{
+    builder.Configuration.AddInMemoryCollection(payPalConfigValues);
+}
+
 Microsoft.eShopWeb.Infrastructure.Dependencies.ConfigureServices(builder.Configuration, builder.Services);
+builder.Services.AddPayPalIntegration(builder.Configuration);
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
         .AddEntityFrameworkStores<AppIdentityDbContext>()

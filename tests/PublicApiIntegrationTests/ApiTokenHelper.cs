@@ -26,6 +26,15 @@ namespace PublicApiIntegrationTests
             return CreateToken(userName, roles);
         }
 
+        /// <summary>A second, distinct shopper identity - for asserting that one buyer can never see, use, or delete another's resources.</summary>
+        public static string GetOtherNormalUserToken()
+        {
+            string userName = "otherbuyer@example.com";
+            string[] roles = { };
+
+            return CreateToken(userName, roles);
+        }
+
         private static string CreateToken(string userName, string[] roles)
         {
             var claims = new List<Claim> { new Claim(ClaimTypes.Name, userName) };

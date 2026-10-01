@@ -3,6 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.eShopWeb.ApplicationCore.Entities;
 using Microsoft.eShopWeb.ApplicationCore.Entities.BasketAggregate;
 using Microsoft.eShopWeb.ApplicationCore.Entities.OrderAggregate;
+using Microsoft.eShopWeb.ApplicationCore.Entities.OrderPaymentAggregate;
+using Microsoft.eShopWeb.ApplicationCore.Entities.PaymentMethodAggregate;
+using Microsoft.eShopWeb.ApplicationCore.Entities.PaymentOperationClaimAggregate;
 
 namespace Microsoft.eShopWeb.Infrastructure.Data;
 
@@ -18,6 +21,10 @@ public class CatalogContext : DbContext
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderItem> OrderItems { get; set; }
     public DbSet<BasketItem> BasketItems { get; set; }
+    public DbSet<OrderPayment> OrderPayments { get; set; }
+    public DbSet<OrderRefund> OrderRefunds { get; set; }
+    public DbSet<VaultedPaymentMethod> VaultedPaymentMethods { get; set; }
+    public DbSet<PaymentOperationClaim> PaymentOperationClaims { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
