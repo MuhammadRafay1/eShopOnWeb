@@ -31,24 +31,37 @@ public class ExceptionMiddleware
     private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
         context.Response.ContentType = "application/json";
+        context.Response.StatusCode = StatusCodeFor(exception);
 
-        if (exception is DuplicateException duplicationException)
+        await context.Response.WriteAsync(new ErrorDetails()
         {
-            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = duplicationException.Message
-            }.ToString());
-        }
-        else
+            StatusCode = context.Response.StatusCode,
+            Message = exception.Message
+        }.ToString());
+    }
+
+    private static int StatusCodeFor(Exception exception) => exception switch
+    {
+        DuplicateException => (int)HttpStatusCode.Conflict,
+        ResourceNotFoundException => (int)HttpStatusCode.NotFound,
+        RefundAmountExceededException => (int)HttpStatusCode.UnprocessableEntity,
+        AuthorizationExpiredException => (int)HttpStatusCode.Conflict,
+        PaymentChallengeRequiredException => (int)HttpStatusCode.UnprocessableEntity,
+        PaymentAuthorizationException => (int)HttpStatusCode.Conflict,
+        PayPalGatewayException g => StatusCodeForGateway(g),
+        PaymentException => (int)HttpStatusCode.BadRequest,
+        _ => (int)HttpStatusCode.InternalServerError
+    };
+
+    private static int StatusCodeForGateway(PayPalGatewayException gateway)
+    {
+        // A PayPal 4xx means the caller's request was rejected (surface the same status so they can act
+        // on it); anything else (no status, or a PayPal 5xx/connection failure) is this app's problem - 502.
+        if (gateway.StatusCode is >= 400 and < 500)
         {
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = exception.Message
-            }.ToString());
+            return gateway.StatusCode.Value;
         }
+
+        return (int)HttpStatusCode.BadGateway;
     }
 }
