@@ -12,6 +12,7 @@ using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
+using Microsoft.eShopWeb.Infrastructure.PayPal;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
 using Microsoft.Extensions.Configuration;
@@ -84,6 +85,21 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 builder.Configuration.AddEnvironmentVariables();
+
+// --- PayPal integration (additive) ---
+// Bind the PayPal section with fail-fast validation: the host refuses to start when a credential is
+// missing or blank, or the environment is not sandbox. Values come from PAYPAL_* env vars loaded into
+// .NET user-secrets at runtime — none are committed to the repo.
+builder.Services.AddOptions<PayPalOptions>()
+    .Bind(builder.Configuration.GetSection(PayPalOptions.SectionName))
+    .ValidateDataAnnotations()
+    .Validate(o => !string.IsNullOrWhiteSpace(o.ClientId), "PayPal:ClientId is not configured (set PAYPAL_CLIENT_ID).")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.ClientSecret), "PayPal:ClientSecret is not configured (set PAYPAL_CLIENT_SECRET).")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.Currency), "PayPal:Currency is not configured (set PAYPAL_CURRENCY).")
+    .Validate(o => string.Equals(o.Environment?.Trim(), "sandbox", StringComparison.OrdinalIgnoreCase),
+        "PayPal:Environment must be 'sandbox' (set PAYPAL_ENVIRONMENT=sandbox); this SDK build targets the PayPal sandbox only.")
+    .ValidateOnStart();
+builder.Services.AddPayPalIntegration();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>

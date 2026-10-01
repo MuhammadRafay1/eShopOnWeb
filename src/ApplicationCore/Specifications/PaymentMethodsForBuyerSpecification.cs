@@ -1,0 +1,13 @@
+using Ardalis.Specification;
+using Microsoft.eShopWeb.ApplicationCore.Entities.PaymentMethodAggregate;
+
+namespace Microsoft.eShopWeb.ApplicationCore.Specifications;
+
+/// <summary>All of a shopper's saved cards — for <c>GET /api/payment-methods</c>.</summary>
+public sealed class PaymentMethodsForBuyerSpecification : Specification<PaymentMethod>
+{
+    public PaymentMethodsForBuyerSpecification(string buyerId)
+    {
+        Query.Where(pm => pm.BuyerId == buyerId);
+    }
+}
