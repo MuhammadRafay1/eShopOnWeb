@@ -17,11 +17,52 @@ public class Order : BaseEntity, IAggregateRoot
         BuyerId = buyerId;
         ShipToAddress = shipToAddress;
         _orderItems = items;
+        Status = OrderStatus.AwaitingPayment;
     }
 
     public string BuyerId { get; private set; }
     public DateTimeOffset OrderDate { get; private set; } = DateTimeOffset.Now;
     public Address ShipToAddress { get; private set; }
+
+    /// <summary>
+    /// The additive paid-order lifecycle status. Defaults to <see cref="OrderStatus.AwaitingPayment"/>.
+    /// Existing (unpaid) checkout orders created through the legacy flow are also AwaitingPayment, which is
+    /// harmless: nothing drives them through the payment state machine.
+    /// </summary>
+    public OrderStatus Status { get; private set; } = OrderStatus.AwaitingPayment;
+
+    public DateTimeOffset? FulfilledAt { get; private set; }
+    public DateTimeOffset? CancelledAt { get; private set; }
+
+    /// <summary>The PayPal money state for this order (1:1). Null until the order is paid.</summary>
+    public Payment? Payment { get; private set; }
+
+    /// <summary>Attach the payment aggregate at authorization time.</summary>
+    public void AttachPayment(Payment payment)
+    {
+        Guard.Against.Null(payment, nameof(payment));
+        Payment = payment;
+    }
+
+    public void MarkAuthorized() => Status = OrderStatus.Authorized;
+
+    public void MarkFulfilled()
+    {
+        Status = OrderStatus.Fulfilled;
+        FulfilledAt = DateTimeOffset.UtcNow;
+    }
+
+    public void MarkCancelled()
+    {
+        Status = OrderStatus.Cancelled;
+        CancelledAt = DateTimeOffset.UtcNow;
+    }
+
+    public void MarkPartiallyRefunded() => Status = OrderStatus.PartiallyRefunded;
+
+    public void MarkRefunded() => Status = OrderStatus.Refunded;
+
+    public void MarkPaymentFailed() => Status = OrderStatus.PaymentFailed;
 
     // DDD Patterns comment
     // Using a private collection field, better for DDD Aggregate's encapsulation

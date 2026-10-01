@@ -20,4 +20,11 @@ public class Buyer : BaseEntity, IAggregateRoot
         Guard.Against.NullOrEmpty(identity, nameof(identity));
         IdentityGuid = identity;
     }
+
+    public PaymentMethod AddPaymentMethod(string alias, string payPalPaymentTokenId, string? last4, string? brand, string? expiry)
+    {
+        var method = new PaymentMethod(alias, payPalPaymentTokenId, last4, brand, expiry);
+        _paymentMethods.Add(method);
+        return method;
+    }
 }
