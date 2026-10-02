@@ -41,5 +41,10 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         });
 
         builder.Navigation(x => x.ShipToAddress).IsRequired();
+
+        builder.HasOne(o => o.Payment)
+            .WithOne()
+            .HasForeignKey<Microsoft.eShopWeb.ApplicationCore.Entities.OrderAggregate.OrderPayment>(p => p.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
