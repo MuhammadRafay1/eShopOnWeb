@@ -29,6 +29,8 @@ builder.Services.AddEndpoints();
 
 // Use to force loading of appsettings.json of test project
 builder.Configuration.AddConfigurationFile("appsettings.test.json");
+// Load the Upvest credentials from .NET user-secrets regardless of environment (values are never in the repo).
+builder.Configuration.AddUserSecrets(typeof(Program).Assembly, optional: true);
 builder.Logging.AddConsole();
 
 Microsoft.eShopWeb.Infrastructure.Dependencies.ConfigureServices(builder.Configuration, builder.Services);
@@ -44,6 +46,13 @@ var catalogSettings = builder.Configuration.Get<CatalogSettings>() ?? new Catalo
 builder.Services.AddSingleton<IUriComposer>(new UriComposer(catalogSettings));
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(LoggerAdapter<>));
 builder.Services.AddScoped<ITokenClaimsService, IdentityTokenClaimService>();
+
+// Invest your change: Upvest connection (single authenticating DelegatingHandler + SDK client + gateway),
+// the request-facing service, the background reconciler and the worker that drives it.
+Microsoft.eShopWeb.Infrastructure.Upvest.UpvestServiceCollectionExtensions.AddUpvestIntegration(builder.Services, builder.Configuration);
+builder.Services.AddScoped<Microsoft.eShopWeb.ApplicationCore.Services.InvestingService>();
+builder.Services.AddScoped<Microsoft.eShopWeb.ApplicationCore.Services.InvestingReconciler>();
+builder.Services.AddHostedService<Microsoft.eShopWeb.PublicApi.InvestingEndpoints.InvestingBackgroundService>();
 
 var configSection = builder.Configuration.GetRequiredSection(BaseUrlConfiguration.CONFIG_NAME);
 builder.Services.Configure<BaseUrlConfiguration>(configSection);
