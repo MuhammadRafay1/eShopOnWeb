@@ -1,8 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.eShopWeb.ApplicationCore.Interfaces;
+using Microsoft.eShopWeb.Infrastructure.Billing;
+using Microsoft.eShopWeb.Infrastructure.Billing.MaxioApi;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 
 namespace Microsoft.eShopWeb.Infrastructure;
 
@@ -36,5 +40,23 @@ public static class Dependencies
             services.AddDbContext<AppIdentityDbContext>(options =>
                 options.UseSqlServer(configuration.GetConnectionString("IdentityConnection")));
         }
+
+        ConfigureBillingServices(configuration, services);
+    }
+
+    /// <summary>
+    /// Registers the recurring-subscription billing capability backed by the
+    /// Maxio Advanced Billing API. Binds the "Maxio" configuration section
+    /// (Maxio:ApiKey, Maxio:Subdomain, Maxio:ProductFamilyHandle, Maxio:BaseUrl).
+    /// Configuration is validated lazily (on first use) so hosts without
+    /// billing credentials can still start.
+    /// </summary>
+    private static void ConfigureBillingServices(IConfiguration configuration, IServiceCollection services)
+    {
+        services.AddOptions<MaxioBillingOptions>()
+            .Bind(configuration.GetSection(MaxioBillingOptions.SectionName));
+
+        services.AddHttpClient<MaxioApiClient>();
+        services.AddScoped<IBillingService, MaxioBillingService>();
     }
 }
