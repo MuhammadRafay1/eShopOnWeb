@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using BlazorShared;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -12,6 +13,7 @@ using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
+using Microsoft.eShopWeb.Infrastructure.Upvest;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
 using Microsoft.Extensions.Configuration;
@@ -44,6 +46,9 @@ var catalogSettings = builder.Configuration.Get<CatalogSettings>() ?? new Catalo
 builder.Services.AddSingleton<IUriComposer>(new UriComposer(catalogSettings));
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(LoggerAdapter<>));
 builder.Services.AddScoped<ITokenClaimsService, IdentityTokenClaimService>();
+
+// Invest-your-change capability (Upvest integration).
+builder.Services.AddUpvestInvesting(builder.Configuration);
 
 var configSection = builder.Configuration.GetRequiredSection(BaseUrlConfiguration.CONFIG_NAME);
 builder.Services.Configure<BaseUrlConfiguration>(configSection);
@@ -144,6 +149,25 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         app.Logger.LogError(ex, "An error occurred seeding the DB.");
+    }
+
+    // Best-effort: subscribe to Upvest events so the shop is notified of acceptances and settlements.
+    // Delivery is never relied upon — the background reconciler keeps state correct regardless.
+    try
+    {
+        var upvestOptions = scopedProvider
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<UpvestOptions>>().Value;
+        if (!string.IsNullOrWhiteSpace(upvestOptions.CallbackBaseUrl))
+        {
+            var upvestClient = scopedProvider.GetRequiredService<IUpvestClient>();
+            var callbackUrl = upvestOptions.CallbackBaseUrl.TrimEnd('/') + "/api/investing/upvest-events";
+            await upvestClient.EnsureWebhookAsync(callbackUrl, CancellationToken.None);
+            app.Logger.LogInformation("Ensured Upvest webhook subscription.");
+        }
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Could not register the Upvest webhook at startup; relying on the reconciler.");
     }
 }
 
