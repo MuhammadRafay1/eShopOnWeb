@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using BlazorShared;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -13,7 +14,9 @@ using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
 using Microsoft.eShopWeb.PublicApi;
+using Microsoft.eShopWeb.PublicApi.InvestingEndpoints;
 using Microsoft.eShopWeb.PublicApi.Middleware;
+using Microsoft.eShopWeb.Infrastructure.Upvest;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -85,6 +88,11 @@ builder.Services.AddControllers();
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 builder.Configuration.AddEnvironmentVariables();
 
+// "Invest your change" — Upvest investing integration (signing handler, SDK client, gateway, services)
+// plus the background worker that advances enrolments, invests balances and settles investments.
+builder.Services.AddUpvestInvesting(builder.Configuration);
+builder.Services.AddHostedService<InvestingBackgroundService>();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -144,6 +152,15 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         app.Logger.LogError(ex, "An error occurred seeding the DB.");
+    }
+
+    // Fail fast: when the Upvest investing feature is configured at all, validate ALL of its
+    // configuration and load the signing key before serving any request — throwing with a message that
+    // names the missing/invalid config key (never a secret value). When the section is entirely absent
+    // (e.g. the test host, where investing is dormant), skip rather than block startup.
+    if (app.Configuration.GetSection("Upvest").GetChildren().Any())
+    {
+        scopedProvider.GetRequiredService<IUpvestRequestSigner>();
     }
 }
 
