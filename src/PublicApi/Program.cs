@@ -12,6 +12,7 @@ using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
+using Microsoft.eShopWeb.Infrastructure.Upvest;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
 using Microsoft.Extensions.Configuration;
@@ -84,6 +85,29 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 builder.Configuration.AddEnvironmentVariables();
+
+// Bind Upvest settings from the Upvest: configuration section. Values are provided via .NET
+// user-secrets (loaded from the environment per the task). As a convenience they are also mapped
+// here from the UPVEST_* environment variables when present, so the integration runs whether the
+// credentials were placed in user-secrets or left in the environment. No value is ever written to
+// a file in the repository.
+var upvestFromEnv = new Dictionary<string, string?>();
+void MapUpvest(string envName, string key)
+{
+    var value = Environment.GetEnvironmentVariable(envName);
+    if (!string.IsNullOrEmpty(value)) upvestFromEnv[key] = value;
+}
+MapUpvest("UPVEST_CLIENT_ID", "Upvest:ClientId");
+MapUpvest("UPVEST_CLIENT_SECRET", "Upvest:ClientSecret");
+MapUpvest("UPVEST_SIGNING_KEY_ID", "Upvest:SigningKeyId");
+MapUpvest("UPVEST_SIGNING_KEY_PATH", "Upvest:SigningKeyPath");
+MapUpvest("UPVEST_SIGNING_KEY_PASSPHRASE", "Upvest:SigningKeyPassphrase");
+MapUpvest("UPVEST_BASE_URL", "Upvest:BaseUrl");
+MapUpvest("UPVEST_INSTRUMENT_ID", "Upvest:InstrumentId");
+MapUpvest("UPVEST_CALLBACK_BASE_URL", "Upvest:CallbackBaseUrl");
+if (upvestFromEnv.Count > 0) builder.Configuration.AddInMemoryCollection(upvestFromEnv);
+
+builder.Services.AddUpvestInvesting(builder.Configuration);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
