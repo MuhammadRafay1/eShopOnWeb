@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    The vendored Upvest SDK (committed, never edited) carries its own inline
+    PackageReference versions. Disable central package management for everything
+    under vendor/ so these inline versions are honoured instead of the repo-root
+    Directory.Packages.props, which would otherwise reject them (NU1008).
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

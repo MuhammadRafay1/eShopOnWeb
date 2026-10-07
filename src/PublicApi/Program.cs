@@ -11,6 +11,8 @@ using Microsoft.eShopWeb.ApplicationCore.Interfaces;
 using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
+using Microsoft.eShopWeb.Infrastructure.Investing;
+using Microsoft.eShopWeb.Infrastructure.Investing.Upvest;
 using Microsoft.eShopWeb.Infrastructure.Logging;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
@@ -18,6 +20,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MinimalApi.Endpoint.Configurations.Extensions;
@@ -29,6 +32,8 @@ builder.Services.AddEndpoints();
 
 // Use to force loading of appsettings.json of test project
 builder.Configuration.AddConfigurationFile("appsettings.test.json");
+// Upvest credentials are loaded from user-secrets (never from a repo file), regardless of environment.
+builder.Configuration.AddUserSecrets(System.Reflection.Assembly.GetExecutingAssembly(), optional: true);
 builder.Logging.AddConsole();
 
 Microsoft.eShopWeb.Infrastructure.Dependencies.ConfigureServices(builder.Configuration, builder.Services);
@@ -44,6 +49,9 @@ var catalogSettings = builder.Configuration.Get<CatalogSettings>() ?? new Catalo
 builder.Services.AddSingleton<IUriComposer>(new UriComposer(catalogSettings));
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(LoggerAdapter<>));
 builder.Services.AddScoped<ITokenClaimsService, IdentityTokenClaimService>();
+
+// "Invest your change" — Upvest client (single signing handler), gateway, service, reconciler.
+builder.Services.AddInvestingServices(builder.Configuration);
 
 var configSection = builder.Configuration.GetRequiredSection(BaseUrlConfiguration.CONFIG_NAME);
 builder.Services.Configure<BaseUrlConfiguration>(configSection);
@@ -144,6 +152,23 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         app.Logger.LogError(ex, "An error occurred seeding the DB.");
+    }
+
+    // Best-effort: register the Upvest webhook so settlement events are pushed here. Reconciliation
+    // polls regardless, so a failure (e.g. provider without webhooks) is non-fatal.
+    try
+    {
+        var upvestOptions = scopedProvider.GetRequiredService<IOptions<UpvestOptions>>().Value;
+        if (!string.IsNullOrWhiteSpace(upvestOptions.CallbackBaseUrl))
+        {
+            var gateway = scopedProvider.GetRequiredService<IInvestingGateway>();
+            var callbackUrl = upvestOptions.CallbackBaseUrl.TrimEnd('/') + "/api/investing/upvest/webhook";
+            await gateway.EnsureSettlementWebhookAsync(callbackUrl);
+        }
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning("Could not register the Upvest webhook subscription: {Message}", ex.Message);
     }
 }
 
