@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    The repository root enables central package management. The vendored Upvest SDK
+    (committed verbatim, never edited) pins its own package versions inline, which is
+    incompatible with central management. This file shadows the root one for everything
+    under vendor/ so the SDK builds with its own versions untouched.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

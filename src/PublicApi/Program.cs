@@ -11,7 +11,9 @@ using Microsoft.eShopWeb.ApplicationCore.Interfaces;
 using Microsoft.eShopWeb.ApplicationCore.Services;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
+using Microsoft.eShopWeb.Infrastructure.Investing;
 using Microsoft.eShopWeb.Infrastructure.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
 using Microsoft.Extensions.Configuration;
@@ -44,6 +46,9 @@ var catalogSettings = builder.Configuration.Get<CatalogSettings>() ?? new Catalo
 builder.Services.AddSingleton<IUriComposer>(new UriComposer(catalogSettings));
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(LoggerAdapter<>));
 builder.Services.AddScoped<ITokenClaimsService, IdentityTokenClaimService>();
+
+// "Invest your change" — Upvest integration (options, signed SDK client, gateway, service).
+builder.Services.AddInvesting(builder.Configuration);
 
 var configSection = builder.Configuration.GetRequiredSection(BaseUrlConfiguration.CONFIG_NAME);
 builder.Services.Configure<BaseUrlConfiguration>(configSection);
@@ -144,6 +149,22 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         app.Logger.LogError(ex, "An error occurred seeding the DB.");
+    }
+
+    // Set up the Upvest webhook subscription (best effort — reconciliation on read is authoritative).
+    try
+    {
+        var upvestOptions = scopedProvider.GetRequiredService<IOptions<UpvestOptions>>().Value;
+        if (!string.IsNullOrWhiteSpace(upvestOptions.CallbackBaseUrl))
+        {
+            var gateway = scopedProvider.GetRequiredService<IUpvestInvestingGateway>();
+            var callbackUrl = upvestOptions.CallbackBaseUrl.TrimEnd('/') + "/api/investing/upvest-webhook";
+            await gateway.EnsureWebhookSubscriptionAsync(callbackUrl);
+        }
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning("Upvest webhook setup was skipped: {Error}", ex.Message);
     }
 }
 
