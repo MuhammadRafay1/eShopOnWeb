@@ -1,0 +1,6 @@
+<Project>
+  <!-- Isolation boundary for the vendored Upvest SDK.
+       Stops the vendored project from inheriting the repository-root
+       Directory.Build.props / analyzer / nullable settings. This file is
+       intentionally empty of imports so the MSBuild directory walk stops here. -->
+</Project>

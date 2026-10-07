@@ -1,0 +1,9 @@
+<Project>
+  <!-- The vendored Upvest SDK pins its own package versions inline on its
+       PackageReference items. The repository root enables Central Package
+       Management, which forbids inline versions; this file turns CPM back off
+       for everything under vendor/ so the vendored project builds unmodified. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

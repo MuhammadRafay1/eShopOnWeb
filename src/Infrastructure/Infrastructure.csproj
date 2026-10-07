@@ -8,12 +8,17 @@
 	<ItemGroup>
 		<PackageReference Include="Ardalis.Specification.EntityFrameworkCore" />
 		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
 		<PackageReference Include="System.IdentityModel.Tokens.Jwt" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\ApplicationCore\ApplicationCore.csproj" />
+		<!-- Vendored Upvest Investment API SDK (uv apimatic plugin, tag 0.0.5).
+		     Committed under vendor/, never edited; CPM is turned off for vendor/
+		     via vendor/Directory.Packages.props so its inline versions build. -->
+		<ProjectReference Include="..\..\vendor\uv-sdk\UpvestInvestmentApi.Standard\UpvestInvestmentApi.Standard.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="Data\Migrations\" />
