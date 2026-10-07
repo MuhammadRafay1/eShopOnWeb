@@ -1,0 +1,12 @@
+<Project>
+  <!--
+    The Upvest SDK is vendored verbatim at tag 0.0.5 and carries versioned
+    <PackageReference> items. The eShopOnWeb repo enables Central Package
+    Management in its root Directory.Packages.props, which forbids inline
+    versions. This nearer file shadows the root one for the vendored subtree,
+    turning CPM off so the SDK builds exactly as released.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>
