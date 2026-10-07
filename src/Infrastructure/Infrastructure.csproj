@@ -14,6 +14,10 @@
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\ApplicationCore\ApplicationCore.csproj" />
+		<!-- Vendored Upvest Investment API SDK (APIMatic-generated, pinned at tag 0.0.5).
+		     Committed under vendor/ and never edited; CPM is disabled for that tree via
+		     vendor/Directory.Packages.props so the SDK's own inline package versions apply. -->
+		<ProjectReference Include="..\..\vendor\uv-sdk\UpvestInvestmentApi.Standard\UpvestInvestmentApi.Standard.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="Data\Migrations\" />

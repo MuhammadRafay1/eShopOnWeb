@@ -1,0 +1,8 @@
+<Project>
+  <!-- The vendored Upvest SDK (tag 0.0.5) pins its own package versions inline.
+       Disable Central Package Management for everything under vendor/ so the
+       repo-root Directory.Packages.props does not clash with it. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>
