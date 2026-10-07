@@ -10,10 +10,14 @@
 		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
 		<PackageReference Include="System.IdentityModel.Tokens.Jwt" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\ApplicationCore\ApplicationCore.csproj" />
+		<!-- Vendored Upvest Investment API SDK (generated source, pinned at tag 0.0.5). Infrastructure is
+		     the only project that talks to Upvest, so the SDK reference lives here and does not leak out. -->
+		<ProjectReference Include="..\..\vendor\uv-sdk\UpvestInvestmentApi.Standard\UpvestInvestmentApi.Standard.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="Data\Migrations\" />

@@ -1,0 +1,12 @@
+<Project>
+  <!--
+    The vendored Upvest SDK (vendor/uv-sdk) is a third-party, generated project that pins its own
+    package versions and targets netstandard2.0. The repository root Directory.Packages.props turns on
+    central package management and sets a net8.0 TargetFramework, neither of which should apply to the
+    vendored source. This nearest-wins file opts the whole vendor/ subtree out of both, without editing
+    the vendored project itself.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>
