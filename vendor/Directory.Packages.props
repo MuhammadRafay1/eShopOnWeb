@@ -1,0 +1,13 @@
+<Project>
+  <!--
+    The vendored Upvest SDK (tag 0.0.5) declares its own inline PackageReference
+    versions. The repository root enables central package management, which forbids
+    inline versions. This file sits above the vendored source so MSBuild resolves it
+    (the nearest Directory.Packages.props wins) and disables central management for
+    everything under vendor/, leaving the SDK to restore with its own pinned versions.
+    The vendored source is committed but never edited; regenerate the SDK instead.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

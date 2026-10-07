@@ -1,0 +1,66 @@
+
+# Report Order Ex Ante Cost Create Request Savings Plan Fees
+
+## Class Name
+
+`ReportOrderExAnteCostCreateRequestSavingsPlanFees`
+
+## Cases
+
+| Type | Factory Method |
+|  --- | --- |
+| [`AbsoluteFee4`](../../../doc/models/absolute-fee-4.md) | ReportOrderExAnteCostCreateRequestSavingsPlanFees.FromAbsoluteFee4(AbsoluteFee4 absoluteFee4) |
+| [`RelativeFee`](../../../doc/models/relative-fee.md) | ReportOrderExAnteCostCreateRequestSavingsPlanFees.FromRelativeFee(RelativeFee relativeFee) |
+| [`TransactionFee`](../../../doc/models/transaction-fee.md) | ReportOrderExAnteCostCreateRequestSavingsPlanFees.FromTransactionFee(TransactionFee transactionFee) |
+
+## AbsoluteFee4
+
+### Initialization Code
+
+#### Example
+
+```csharp
+ReportOrderExAnteCostCreateRequestSavingsPlanFees value = ReportOrderExAnteCostCreateRequestSavingsPlanFees.FromAbsoluteFee4(
+    new AbsoluteFee4
+    {
+        Type = FeeType8.AnnualAumBasedFee,
+        ValueType = "ABSOLUTE",
+        CashAmount = "cash_amount8",
+        Currency = Currency.Eur,
+    }
+);
+```
+
+## RelativeFee
+
+### Initialization Code
+
+#### Example
+
+```csharp
+ReportOrderExAnteCostCreateRequestSavingsPlanFees value = ReportOrderExAnteCostCreateRequestSavingsPlanFees.FromRelativeFee(
+    new RelativeFee
+    {
+        Type = FeeType8.TransactionFeeBuy,
+        ValueType = "RELATIVE",
+        Bps = "bps8",
+    }
+);
+```
+
+## TransactionFee
+
+### Initialization Code
+
+#### Example
+
+```csharp
+ReportOrderExAnteCostCreateRequestSavingsPlanFees value = ReportOrderExAnteCostCreateRequestSavingsPlanFees.FromTransactionFee(
+    new TransactionFee
+    {
+        Type = FeeType.TransactionFeeBuy,
+        TransactionFeeModelId = new Guid("00001bb2-0000-0000-0000-000000000000"),
+    }
+);
+```
+
