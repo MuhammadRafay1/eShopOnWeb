@@ -1,0 +1,7 @@
+<!--
+  Nearest-wins Directory.Build.props for the vendored Upvest SDK subtree.
+  Its presence stops any repo-root Directory.Build.props from applying to the
+  third-party SDK, keeping the vendored project building as released.
+-->
+<Project>
+</Project>

@@ -1,0 +1,12 @@
+<!--
+  Isolates the vendored, third-party Upvest SDK from the repository's
+  Central Package Management. The SDK project pins its own package versions
+  inline (as generated), which is incompatible with the root
+  Directory.Packages.props. This nearest-wins override turns CPM off for the
+  whole vendor/ subtree so the SDK restores and builds exactly as released.
+-->
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>
