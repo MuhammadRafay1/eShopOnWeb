@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    The vendored Upvest SDK (vendor/uv-sdk) carries explicit package versions on its
+    PackageReference items. The repository root enables Central Package Management, which
+    forbids that. This file is the nearest Directory.Packages.props for everything under
+    vendor/, so it opts the vendored sources out of CPM and leaves the SDK untouched.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

@@ -45,6 +45,10 @@ builder.Services.AddSingleton<IUriComposer>(new UriComposer(catalogSettings));
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(LoggerAdapter<>));
 builder.Services.AddScoped<ITokenClaimsService, IdentityTokenClaimService>();
 
+// "Invest your change" feature (Upvest integration). PublicApi-only.
+builder.Services.AddHttpContextAccessor();
+Microsoft.eShopWeb.Infrastructure.Dependencies.AddUpvestInvesting(builder.Configuration, builder.Services);
+
 var configSection = builder.Configuration.GetRequiredSection(BaseUrlConfiguration.CONFIG_NAME);
 builder.Services.Configure<BaseUrlConfiguration>(configSection);
 var baseUrlConfig = configSection.Get<BaseUrlConfiguration>();
