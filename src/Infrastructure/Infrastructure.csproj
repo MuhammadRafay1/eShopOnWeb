@@ -14,6 +14,9 @@
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\ApplicationCore\ApplicationCore.csproj" />
+		<!-- Upvest Investment API .NET SDK (ships inside the upvest-v4 plugin as source; not on NuGet).
+		     This path is local to this machine's plugin install; re-point it if the plugin moves. -->
+		<ProjectReference Include="..\..\..\marketplace\plugins\upvest-v4\sdk\dotnet\src\UpvestInvestmentApi\UpvestInvestmentApi.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="Data\Migrations\" />
