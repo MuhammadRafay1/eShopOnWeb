@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.eShopWeb.ApplicationCore.Entities;
 using Microsoft.eShopWeb.ApplicationCore.Entities.BasketAggregate;
 using Microsoft.eShopWeb.ApplicationCore.Entities.OrderAggregate;
+using Microsoft.eShopWeb.ApplicationCore.Entities.PortfolioAggregate;
 
 namespace Microsoft.eShopWeb.Infrastructure.Data;
 
@@ -18,6 +19,12 @@ public class CatalogContext : DbContext
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderItem> OrderItems { get; set; }
     public DbSet<BasketItem> BasketItems { get; set; }
+
+    // Managed investment portfolios (additive — see Upvest integration).
+    public DbSet<PortfolioInvestor> PortfolioInvestors { get; set; }
+    public DbSet<ModelPortfolio> ModelPortfolios { get; set; }
+    public DbSet<PortfolioPayment> PortfolioPayments { get; set; }
+    public DbSet<PortfolioRealignment> PortfolioRealignments { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
