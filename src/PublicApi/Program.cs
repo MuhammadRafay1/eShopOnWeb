@@ -33,6 +33,10 @@ builder.Logging.AddConsole();
 
 Microsoft.eShopWeb.Infrastructure.Dependencies.ConfigureServices(builder.Configuration, builder.Services);
 
+// Managed investment portfolios (Upvest). Fails fast if required Upvest:* config is missing.
+Microsoft.eShopWeb.Infrastructure.Upvest.UpvestServiceCollectionExtensions
+    .AddUpvestInvestmentIntegration(builder.Services, builder.Configuration);
+
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
         .AddEntityFrameworkStores<AppIdentityDbContext>()
         .AddDefaultTokenProviders();
