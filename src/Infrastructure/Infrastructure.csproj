@@ -14,8 +14,12 @@
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\ApplicationCore\ApplicationCore.csproj" />
+		<ProjectReference Include="..\..\..\marketplace\plugins\upvest-v4\sdk\dotnet\src\UpvestInvestmentApi\UpvestInvestmentApi.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="Data\Migrations\" />
+	</ItemGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="PortfolioTests" />
 	</ItemGroup>
 </Project>
