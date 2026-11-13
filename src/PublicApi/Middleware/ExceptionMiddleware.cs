@@ -32,23 +32,42 @@ public class ExceptionMiddleware
     {
         context.Response.ContentType = "application/json";
 
-        if (exception is DuplicateException duplicationException)
+        var (statusCode, message) = Map(exception);
+        context.Response.StatusCode = statusCode;
+        await context.Response.WriteAsync(new ErrorDetails()
         {
-            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = duplicationException.Message
-            }.ToString());
-        }
-        else
+            StatusCode = statusCode,
+            Message = message
+        }.ToString());
+    }
+
+    private static (int StatusCode, string Message) Map(Exception exception)
+    {
+        switch (exception)
         {
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = exception.Message
-            }.ToString());
+            case DuplicateException:
+                return ((int)HttpStatusCode.Conflict, exception.Message);
+            case PortfolioValidationException:
+                return ((int)HttpStatusCode.BadRequest, exception.Message);
+            case PortfolioNotFoundException:
+                return ((int)HttpStatusCode.NotFound, exception.Message);
+            case PortfolioConflictException:
+                return ((int)HttpStatusCode.Conflict, exception.Message);
+            case UpvestIntegrationException upvest:
+                // The caller's own credentials/quota are our problem, not theirs; a provider 4xx the caller
+                // can act on is surfaced as that same status; everything else is an upstream failure.
+                var status = (int?)upvest.StatusCode;
+                if (status is 401 or 403 or 429)
+                {
+                    return ((int)HttpStatusCode.BadGateway, "The investment provider is currently unavailable.");
+                }
+                if (status is >= 400 and < 500)
+                {
+                    return (status.Value, "The investment provider rejected the request.");
+                }
+                return ((int)HttpStatusCode.BadGateway, "The investment provider is currently unavailable.");
+            default:
+                return ((int)HttpStatusCode.InternalServerError, exception.Message);
         }
     }
 }
