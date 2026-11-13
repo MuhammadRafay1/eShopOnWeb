@@ -14,6 +14,7 @@ using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
 using Microsoft.eShopWeb.PublicApi;
 using Microsoft.eShopWeb.PublicApi.Middleware;
+using Microsoft.eShopWeb.PublicApi.Portfolio.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -85,6 +86,9 @@ builder.Services.AddControllers();
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 builder.Configuration.AddEnvironmentVariables();
 
+// Managed investment portfolios (Upvest) — additive capability.
+builder.Services.AddManagedPortfolios(builder.Configuration);
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -140,6 +144,10 @@ using (var scope = app.Services.CreateScope())
         var roleManager = scopedProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var identityContext = scopedProvider.GetRequiredService<AppIdentityDbContext>();
         await AppIdentityDbContextSeed.SeedAsync(identityContext, userManager, roleManager);
+
+        // Ensure the PublicApi-owned investment store exists (in-memory provider ignores migrations).
+        var portfolioContext = scopedProvider.GetRequiredService<Microsoft.eShopWeb.PublicApi.Portfolio.Data.PortfolioContext>();
+        await portfolioContext.Database.EnsureCreatedAsync();
     }
     catch (Exception ex)
     {
