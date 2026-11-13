@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using BlazorShared.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.eShopWeb.ApplicationCore.Exceptions;
+using Microsoft.eShopWeb.ApplicationCore.Interfaces.Upvest;
 
 namespace Microsoft.eShopWeb.PublicApi.Middleware;
 
@@ -32,23 +33,42 @@ public class ExceptionMiddleware
     {
         context.Response.ContentType = "application/json";
 
-        if (exception is DuplicateException duplicationException)
+        var (statusCode, message) = Map(exception);
+        context.Response.StatusCode = statusCode;
+        await context.Response.WriteAsync(new ErrorDetails()
         {
-            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = duplicationException.Message
-            }.ToString());
-        }
-        else
+            StatusCode = statusCode,
+            Message = message
+        }.ToString());
+    }
+
+    private static (int StatusCode, string Message) Map(Exception exception)
+    {
+        switch (exception)
         {
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = exception.Message
-            }.ToString());
+            case DuplicateException:
+                return ((int)HttpStatusCode.Conflict, exception.Message);
+
+            // Caller-facing portfolio errors carry their intended HTTP status.
+            case PortfolioException portfolioException:
+                return (portfolioException.StatusCode, portfolioException.Message);
+
+            // Invalid input (e.g. model weights that don't add up to 100).
+            case ArgumentException:
+                return ((int)HttpStatusCode.BadRequest, exception.Message);
+
+            // A failure returned by Upvest. A scope refusal is the known limitation of this
+            // environment's client; surface it as 503 so it reads as "unavailable here", not a bug.
+            case UpvestApiException upvestException when upvestException.IsScopeAuthorizationFailure:
+                return ((int)HttpStatusCode.ServiceUnavailable,
+                    "This capability requires an Upvest permission this environment's client is not granted. " +
+                    $"Upvest reported: {upvestException.Detail}");
+
+            case UpvestApiException upvestException:
+                return ((int)HttpStatusCode.BadGateway, upvestException.Message);
+
+            default:
+                return ((int)HttpStatusCode.InternalServerError, exception.Message);
         }
     }
 }
