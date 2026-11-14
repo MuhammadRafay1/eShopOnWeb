@@ -1,0 +1,33 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\claude-runs\\t10rafay-task10-plugin-opus48medium-007\\repo\\.claude\\hooks\\maxio-process-guard.ps1\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash|PowerShell"
+      },
+      {
+        "hooks": [
+          {
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\claude-runs\\t10rafay-task10-plugin-opus48medium-007\\repo\\.claude\\hooks\\task10-web-guard.ps1\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "WebSearch|WebFetch"
+      },
+      {
+        "hooks": [
+          {
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\claude-runs\\t10rafay-task10-plugin-opus48medium-007\\repo\\.claude\\hooks\\task10-isolation-guard.ps1\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash|PowerShell|Read|Grep|Glob|Edit|Write|NotebookEdit"
+      }
+    ]
+  }
+}
