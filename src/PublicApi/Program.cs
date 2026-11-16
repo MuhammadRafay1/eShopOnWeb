@@ -8,7 +8,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.eShopWeb;
 using Microsoft.eShopWeb.ApplicationCore.Constants;
 using Microsoft.eShopWeb.ApplicationCore.Interfaces;
+using Microsoft.eShopWeb.ApplicationCore.Interfaces.Upvest;
 using Microsoft.eShopWeb.ApplicationCore.Services;
+using Microsoft.eShopWeb.Infrastructure.Upvest;
 using Microsoft.eShopWeb.Infrastructure.Data;
 using Microsoft.eShopWeb.Infrastructure.Identity;
 using Microsoft.eShopWeb.Infrastructure.Logging;
@@ -44,6 +46,16 @@ var catalogSettings = builder.Configuration.Get<CatalogSettings>() ?? new Catalo
 builder.Services.AddSingleton<IUriComposer>(new UriComposer(catalogSettings));
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(LoggerAdapter<>));
 builder.Services.AddScoped<ITokenClaimsService, IdentityTokenClaimService>();
+
+// Upvest managed-portfolio integration.
+builder.Services.Configure<UpvestSettings>(builder.Configuration.GetSection(UpvestSettings.ConfigSection));
+builder.Services.AddSingleton<UpvestMessageSigner>();
+builder.Services.AddHttpClient<IUpvestClient, UpvestClient>();
+builder.Services.AddScoped<IInvestorService, InvestorService>();
+builder.Services.AddScoped<IModelPortfolioService, ModelPortfolioService>();
+builder.Services.AddScoped<IPortfolioPaymentService, PortfolioPaymentService>();
+builder.Services.AddScoped<IRealignmentService, RealignmentService>();
+builder.Services.AddScoped<IPortfolioViewService, PortfolioViewService>();
 
 var configSection = builder.Configuration.GetRequiredSection(BaseUrlConfiguration.CONFIG_NAME);
 builder.Services.Configure<BaseUrlConfiguration>(configSection);
