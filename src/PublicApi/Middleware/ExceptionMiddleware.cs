@@ -41,6 +41,34 @@ public class ExceptionMiddleware
                 Message = duplicationException.Message
             }.ToString());
         }
+        else if (exception is PortfolioValidationException validationException)
+        {
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            await context.Response.WriteAsync(new ErrorDetails()
+            {
+                StatusCode = context.Response.StatusCode,
+                Message = validationException.Message
+            }.ToString());
+        }
+        else if (exception is PortfolioStateException stateException)
+        {
+            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
+            await context.Response.WriteAsync(new ErrorDetails()
+            {
+                StatusCode = context.Response.StatusCode,
+                Message = stateException.Message
+            }.ToString());
+        }
+        else if (exception is UpvestGatewayException gatewayException)
+        {
+            // The gateway's message is caller-safe (no SDK detail, URL, or personal data).
+            context.Response.StatusCode = MapUpvestStatus(gatewayException);
+            await context.Response.WriteAsync(new ErrorDetails()
+            {
+                StatusCode = context.Response.StatusCode,
+                Message = gatewayException.Message
+            }.ToString());
+        }
         else
         {
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
@@ -50,5 +78,26 @@ public class ExceptionMiddleware
                 Message = exception.Message
             }.ToString());
         }
+    }
+
+    /// <summary>
+    /// Map a provider failure to a caller-facing status: our own auth/quota faults and transport/unknowns
+    /// become 5xx (the caller did nothing wrong), while a provider 4xx the caller can act on is passed through.
+    /// </summary>
+    private static int MapUpvestStatus(UpvestGatewayException ex)
+    {
+        if (ex.StatusCode is null)
+        {
+            return (int)HttpStatusCode.BadGateway; // transport/timeout/unknown
+        }
+
+        var code = (int)ex.StatusCode.Value;
+        return ex.StatusCode.Value switch
+        {
+            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => (int)HttpStatusCode.BadGateway,
+            HttpStatusCode.TooManyRequests => (int)HttpStatusCode.ServiceUnavailable,
+            _ when code is >= 400 and < 500 => code,
+            _ => (int)HttpStatusCode.BadGateway
+        };
     }
 }
