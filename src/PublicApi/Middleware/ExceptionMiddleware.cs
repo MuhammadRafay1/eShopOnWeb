@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using BlazorShared.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.eShopWeb.ApplicationCore.Exceptions;
+using Microsoft.eShopWeb.ApplicationCore.Portfolio;
 
 namespace Microsoft.eShopWeb.PublicApi.Middleware;
 
@@ -39,6 +40,26 @@ public class ExceptionMiddleware
             {
                 StatusCode = context.Response.StatusCode,
                 Message = duplicationException.Message
+            }.ToString());
+        }
+        else if (exception is PortfolioException portfolioException)
+        {
+            // Client-facing portfolio error with its own HTTP status and a safe message.
+            context.Response.StatusCode = portfolioException.StatusCode;
+            await context.Response.WriteAsync(new ErrorDetails()
+            {
+                StatusCode = context.Response.StatusCode,
+                Message = portfolioException.Message
+            }.ToString());
+        }
+        else if (exception is UpvestApiException upvestException)
+        {
+            // Upvest refused the call. Surface a gateway error without echoing any request data.
+            context.Response.StatusCode = (int)HttpStatusCode.BadGateway;
+            await context.Response.WriteAsync(new ErrorDetails()
+            {
+                StatusCode = context.Response.StatusCode,
+                Message = "The investment provider rejected the request: " + upvestException.Message
             }.ToString());
         }
         else
