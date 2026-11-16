@@ -33,6 +33,11 @@ builder.Logging.AddConsole();
 
 Microsoft.eShopWeb.Infrastructure.Dependencies.ConfigureServices(builder.Configuration, builder.Services);
 
+// Managed investment portfolios (Upvest). Binds and validates the Upvest: configuration (failing
+// startup fast if a credential is missing) and registers the Upvest-backed portfolio service.
+Microsoft.eShopWeb.Infrastructure.Portfolio.ManagedPortfolioServiceCollectionExtensions
+    .AddManagedPortfolio(builder.Services, builder.Configuration);
+
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
         .AddEntityFrameworkStores<AppIdentityDbContext>()
         .AddDefaultTokenProviders();

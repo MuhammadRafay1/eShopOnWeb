@@ -32,23 +32,38 @@ public class ExceptionMiddleware
     {
         context.Response.ContentType = "application/json";
 
-        if (exception is DuplicateException duplicationException)
+        var (statusCode, message) = Map(exception);
+        context.Response.StatusCode = statusCode;
+        await context.Response.WriteAsync(new ErrorDetails()
         {
-            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = duplicationException.Message
-            }.ToString());
-        }
-        else
+            StatusCode = statusCode,
+            Message = message
+        }.ToString());
+    }
+
+    // Single mapping from failure kind → caller-facing status. Provider auth/quota failures are OUR
+    // fault (5xx), not the caller's; a provider 4xx the caller can act on is passed through.
+    private static (int StatusCode, string Message) Map(Exception exception) => exception switch
+    {
+        DuplicateException => ((int)HttpStatusCode.Conflict, exception.Message),
+        InvestorNotFoundException => ((int)HttpStatusCode.NotFound, exception.Message),
+        ModelPortfolioNotFoundException => ((int)HttpStatusCode.NotFound, exception.Message),
+        PortfolioValidationException => ((int)HttpStatusCode.BadRequest, exception.Message),
+        NotAnAcceptedInvestorException => ((int)HttpStatusCode.Conflict, exception.Message),
+        UnauthorizedAccessException => ((int)HttpStatusCode.Unauthorized, "Not authenticated."),
+        UpvestProviderException p => MapProvider(p),
+        _ => ((int)HttpStatusCode.InternalServerError, exception.Message)
+    };
+
+    private static (int StatusCode, string Message) MapProvider(UpvestProviderException ex)
+    {
+        var status = (int?)ex.StatusCode;
+        return status switch
         {
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            await context.Response.WriteAsync(new ErrorDetails()
-            {
-                StatusCode = context.Response.StatusCode,
-                Message = exception.Message
-            }.ToString());
-        }
+            401 or 403 => ((int)HttpStatusCode.BadGateway, "The investment provider is unavailable."),
+            429 => ((int)HttpStatusCode.ServiceUnavailable, "The investment provider is temporarily unavailable."),
+            >= 400 and < 500 => (status!.Value, ex.Message),
+            _ => ((int)HttpStatusCode.BadGateway, ex.Message)
+        };
     }
 }
