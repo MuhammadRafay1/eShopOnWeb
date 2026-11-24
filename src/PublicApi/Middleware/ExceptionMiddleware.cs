@@ -41,6 +41,17 @@ public class ExceptionMiddleware
                 Message = duplicationException.Message
             }.ToString());
         }
+        else if (exception is UpvestApiException upvestException)
+        {
+            // A failure talking to Upvest is an upstream/gateway problem. The message carries only the
+            // operation, HTTP status and the provider's generic problem detail — never personal data.
+            context.Response.StatusCode = (int)HttpStatusCode.BadGateway;
+            await context.Response.WriteAsync(new ErrorDetails()
+            {
+                StatusCode = context.Response.StatusCode,
+                Message = upvestException.Message
+            }.ToString());
+        }
         else
         {
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
